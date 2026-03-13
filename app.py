@@ -67,55 +67,5 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="格式錯誤，請再試一次。"))
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="歡迎來到 RideMatch！\n輸入『我要載客』或『我要送貨』開始測試。"))
-from linebot.models import (
-    RichMenu, RichMenuSize, RichMenuArea, 
-    RichMenuBounds, MessageAction, URIAction
-)
-
-# ... 前面的程式碼保持不變 ...
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    msg = event.message.text
-    user_id = event.source.user_id
-
-    # 【隱藏指令】輸入「設定選單」來建立圖文選單
-    if msg == "設定選單":
-        rich_menu_to_create = RichMenu(
-            size=RichMenuSize(width=2500, height=1686),
-            selected=True,
-            name="Main Menu",
-            chat_bar_text="點我開啟選單",
-            areas=[
-                # 左上：我要載人/貨
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=0, y=0, width=1250, height=843),
-                    action=MessageAction(label="我要載客/貨", text="我要載客/貨")
-                ),
-                # 右上：我要搭車/寄物
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=1250, y=0, width=1250, height=843),
-                    action=MessageAction(label="我要搭車/寄物", text="我要搭車/寄物")
-                ),
-                # 左下：我的行程
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=0, y=843, width=1250, height=843),
-                    action=MessageAction(label="我的行程", text="我的行程")
-                ),
-                # 右下：媒合規則
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=1250, y=843, width=1250, height=843),
-                    action=MessageAction(label="媒合規則", text="媒合規則")
-                )
-            ]
-        )
-        rich_menu_id = line_bot_api.create_rich_menu(rich_menu=rich_menu_to_create)
-        
-        # 這裡需要一張預設圖片的網址，或者你手動上傳
-        # 暫時先告訴你 ID，我們下一回教你怎麼上傳圖檔
-        line_bot_api.set_default_rich_menu(rich_menu_id)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"選單建立成功！\nID: {rich_menu_id}\n請上傳選單底圖。"))
-
-    # ... 原有的載客、資料庫邏輯 ...
 if __name__ == "__main__":
     app.run()
