@@ -47,16 +47,18 @@ def callback():
         abort(400)
     return 'OK'
 
-def find_match(user_id, user_type, start_p, end_p):
+def find_match(user_id, user_type, time_p, start_p, end_p):
     conn = sqlite3.connect('ridematch.db')
     cursor = conn.cursor()
     opposite_type = 'seeker' if user_type == 'driver' else 'driver'
-    # 尋找相反身份且路線一致的最新一筆
+    
+    # 增加 time_info = ? 的條件
     cursor.execute('''
         SELECT user_id FROM matches 
-        WHERE user_type = ? AND start_point = ? AND end_point = ? AND user_id != ?
+        WHERE user_type = ? AND time_info = ? AND start_point = ? AND end_point = ? AND user_id != ?
         ORDER BY id DESC LIMIT 1
-    ''', (opposite_type, start_p, end_p, user_id))
+    ''', (opposite_type, time_p, start_p, end_p, user_id))
+    
     match = cursor.fetchone()
     conn.close()
     return match[0] if match else None
@@ -105,7 +107,7 @@ def handle_message(event):
             conn.commit()
             
             # 執行媒合
-            match_user_id = find_match(user_id, u_type, start_p, end_p)
+            match_user_id = find_match(user_id, u_type, time_p, start_p, end_p)
             conn.close()
 
             if match_user_id:
