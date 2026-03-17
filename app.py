@@ -16,7 +16,7 @@ line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
 def init_db():
-    conn = sqlite3.connect('ridematch_v2.db')
+    conn = sqlite3.connect('ridematch.db')
     cursor = conn.cursor()
     # 增加彈性欄位：flexible_time (1=願意, 0=不願意), flexible_loc (1=願意, 0=不願意)
     cursor.execute('''CREATE TABLE IF NOT EXISTS matches 
@@ -31,7 +31,7 @@ init_db()
 
 # --- 輔助函數：模糊媒合 ---
 def find_fuzzy_match(user_id, u_type, t_time, city, dist, flex_t, flex_l):
-    conn = sqlite3.connect('ridematch_v2.db')
+    conn = sqlite3.connect('ridematch.db')
     cursor = conn.cursor()
     opp_type = 'seeker' if u_type == 'driver' else 'driver'
     
