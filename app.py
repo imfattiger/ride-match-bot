@@ -18,7 +18,6 @@ handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 def init_db():
     conn = sqlite3.connect('ridematch_v2.db')
     cursor = conn.cursor()
-    cursor.execute('DROP TABLE IF EXISTS user_state')
     # 增加彈性欄位：flexible_time (1=願意, 0=不願意), flexible_loc (1=願意, 0=不願意)
     cursor.execute('''CREATE TABLE IF NOT EXISTS matches 
         (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, 
