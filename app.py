@@ -135,7 +135,12 @@ def handle_message(event):
                     MessageAction(label='可停等休息站', text='規範:可停等休息站'),
                     MessageAction(label='寵物需裝籠', text='規範:寵物需裝籠')
                 ]),
-                CarouselColumn(title='行程規範(3)', text='限制', actions=[
+                CarouselColumn(title='行程規範(3)', text='時間路線座位安排', actions=[
+                    MessageAction(label='不接受指定時間抵達', text='規範:不接受指定時間抵達'),
+                    MessageAction(label='依照駕駛安排座位', text='規範:依照駕駛安排座位'),
+                    MessageAction(label='依照駕駛路線安排', text='規範:依照駕駛路線安排')
+                ]),
+                CarouselColumn(title='行程規範(4)', text='限制', actions=[
                     MessageAction(label='謝絕寵物', text='規範:謝絕寵物'),
                     MessageAction(label='有大型行李先告知', text='規範:大型行李告知'),
                     MessageAction(label='務必準時', text='規範:務必準時')
@@ -145,7 +150,7 @@ def handle_message(event):
             cols = [
                 CarouselColumn(title='費用細節', text='收費與折扣', actions=[
                     MessageAction(label='不接受議價', text='規範:不接受議價'),
-                    MessageAction(label='接受轉帳', text='規範:接受轉帳'),
+                    MessageAction(label='接受線上付款 / 轉帳', text='規範:接受線上付款 / 轉帳'),
                     MessageAction(label='自備零錢', text='規範:自備零錢')
                 ]),
                 CarouselColumn(title='特別減免', text='公益與身分', actions=[
@@ -160,6 +165,16 @@ def handle_message(event):
                     MessageAction(label='全程禁菸酒', text='規範:全程禁菸酒'),
                     MessageAction(label='無菸無檳榔駕駛', text='規範:無菸無檳榔'),
                     MessageAction(label='車內乾淨', text='規範:車內乾淨')
+                ]),
+                CarouselColumn(title='飲食環境', text='用水與食物', actions=[
+                    MessageAction(label='全程配戴口罩 可飲水', text='規範:全程配戴口罩 可飲水'),
+                    MessageAction(label='禁食', text='規範:禁食'),
+                    MessageAction(label='需消毒的請自備', text='規範:需消毒的請自備')
+                ]),
+                CarouselColumn(title='附件環境', text='行李與寵物', actions=[
+                    MessageAction(label='有大型行李箱', text='規範:有大型行李箱'),
+                    MessageAction(label='有寵物搭乘及推車提籠', text='規範:有寵物搭乘及推車提籠'),
+                    MessageAction(label='寵物搭乘酌收清潔費', text='規範:寵物搭乘酌收清潔費')
                 ]),
                 CarouselColumn(title='駕駛安全', text='行車風格', actions=[
                     MessageAction(label='拒絕超速', text='規範:拒絕超速'),
