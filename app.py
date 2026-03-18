@@ -145,16 +145,7 @@ def handle_message(event):
 
     # ... (後面 E, F, G 規範選擇代碼與你 v7 版本相同，不再贅述)
     # [請保留你 v7 的 彈性:、類別:、規範:、最終確認發布 的邏輯]
-    # D. 彈性 -> 啟動「Dauding 標籤循環系統」
-    elif msg.startswith("彈性:"):
-        f = msg.split(":")[1]
-        conn = sqlite3.connect('ridematch_v7.db')
-        cursor = conn.cursor()
-        cursor.execute('UPDATE user_state SET temp_flex = ? WHERE user_id = ?', (f, user_id))
-        conn.commit()
-        conn.close()
-        line_bot_api.reply_message(event.reply_token, get_main_cat_menu("最後一步：自定義您的行程規範。\n"))
-
+    
     # E. 根據類別展示對應卡片 (拆分 Dauding 的 37+ 選項)
     elif msg.startswith("類別:"):
         cat = msg.split(":")[1]
