@@ -12,13 +12,12 @@ from linebot.models import (
 
 app = Flask(__name__)
 
-# --- 1. API 設定 ---
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
-# --- 2. 資料庫初始化 ---
+# --- 2. 資料庫初始化 (改用 v9) ---
 def init_db():
-    conn = sqlite3.connect('ridematch_v7.db')
+    conn = sqlite3.connect('ridematch_v9.db')
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS matches 
         (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, 
@@ -30,7 +29,24 @@ def init_db():
 
 init_db()
 
-# --- 3. 快速回覆選單 (大類導向) ---
+# --- 3. 全台行政區資料庫 (簡化版示範，可持續擴充) ---
+CITY_DATA = {
+    "北部": ["台北市", "新北市", "基隆市", "桃園市", "新竹縣", "新竹市"],
+    "中部": ["苗栗縣", "台中市", "彰化縣", "南投縣", "雲林縣"],
+    "南部": ["嘉義縣", "嘉義市", "台南市", "高雄市", "屏東縣"],
+    "東部": ["宜蘭縣", "花蓮縣", "台東縣"]
+}
+
+DISTRICT_DATA = {
+    "台北市": ["信義區", "大安區", "內湖區", "北投區", "中正區", "萬華區", "中山區", "松山區", "大同區", "南港區", "文山區", "士林區"],
+    "新北市": ["板橋區", "三重區", "中和區", "永和區", "新莊區", "淡水區", "新店區", "土城區", "蘆洲區", "汐止區", "樹林區"],
+    "台中市": ["西屯區", "北屯區", "南屯區", "東區", "南區", "西區", "北區", "大里區", "太平區", "豐原區", "沙鹿區"],
+    "桃園市": ["桃園區", "中壢區", "平鎮區", "八德區", "楊梅區", "蘆竹區", "龜山區", "龍潭區", "大溪區"],
+    "高雄市": ["左營區", "三民區", "新興區", "前鎮區", "苓雅區", "鼓山區", "鳳山區", "楠梓區", "小港區"]
+    # ... 319區可按此格式繼續補完
+}
+
+# --- 4. 輔助函數 ---
 def get_main_cat_menu(text_prefix=""):
     items = [
         QuickReplyButton(action=MessageAction(label="🚗 行程/地點", text="類別:行程")),
@@ -51,32 +67,41 @@ def callback():
         abort(400)
     return 'OK'
 
-# --- 4. 處理 Postback (時間選擇) ---
 @handler.add(PostbackEvent)
 def handle_postback(event):
     user_id = event.source.user_id
     if event.postback.data == "select_time":
         t = event.postback.params['datetime']
-        conn = sqlite3.connect('ridematch_v7.db')
+        conn = sqlite3.connect('ridematch_v9.db')
         cursor = conn.cursor()
         cursor.execute('UPDATE user_state SET temp_time = ? WHERE user_id = ?', (t, user_id))
         conn.commit()
         conn.close()
         
-        cities = ["台北市", "新北市", "桃園市", "台中市", "高雄市"]
-        btns = [QuickReplyButton(action=MessageAction(label=c, text=f"縣市:{c}")) for c in cities]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="📍 時間設定成功！請選擇【縣市】", quick_reply=QuickReply(items=btns)))
+        # 顯示縣市區域卡片 (北中南東)
+        cols = [
+            CarouselColumn(title='🗺️ 出發地點', text='請選擇區域', actions=[
+                MessageAction(label='北部 (北北基桃竹)', text='區域:北部'),
+                MessageAction(label='中部 (苗中彰投雲)', text='區域:中部'),
+                MessageAction(label='南部 (嘉南高屏)', text='區域:南部')
+            ]),
+            CarouselColumn(title='🗺️ 出發地點', text='其他區域', actions=[
+                MessageAction(label='東部 (宜花東)', text='區域:東部'),
+                MessageAction(label='離島', text='區域:離島'),
+                MessageAction(label='重新選擇時間', text='我要載客/貨') # 容錯
+            ])
+        ]
+        line_bot_api.reply_message(event.reply_token, TemplateSendMessage(alt_text='選擇地區', template=CarouselTemplate(columns=cols)))
 
-# --- 5. 核心邏輯 ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
     user_id = event.source.user_id
 
-    # A. 啟動身分選擇
+    # A. 啟動身分
     if msg in ["我要載客/貨", "我要搭車/寄物"]:
         ut = 'driver' if "載客" in msg else 'seeker'
-        conn = sqlite3.connect('ridematch_v7.db')
+        conn = sqlite3.connect('ridematch_v9.db')
         cursor = conn.cursor()
         cursor.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_prefs) VALUES (?, ?, ?)', (user_id, ut, ""))
         conn.commit()
@@ -86,22 +111,31 @@ def handle_message(event):
             quick_reply=QuickReply(items=[QuickReplyButton(action=DatetimePickerAction(label="🕒 點我選擇", data="select_time", mode="datetime"))])
         ))
 
-    # B. 縣市 -> 行政區
+    # B. 區域 -> 縣市
+    elif msg.startswith("區域:"):
+        area = msg.split(":")[1]
+        cities = CITY_DATA.get(area, [])
+        btns = [QuickReplyButton(action=MessageAction(label=c, text=f"縣市:{c}")) for c in cities]
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"已選 {area}，請選擇縣市：", quick_reply=QuickReply(items=btns)))
+
+    # C. 縣市 -> 行政區 (動態抓取)
     elif msg.startswith("縣市:"):
         c = msg.split(":")[1]
-        conn = sqlite3.connect('ridematch_v7.db')
+        conn = sqlite3.connect('ridematch_v9.db')
         cursor = conn.cursor()
         cursor.execute('UPDATE user_state SET temp_city = ? WHERE user_id = ?', (c, user_id))
         conn.commit()
         conn.close()
-        dists = ["板橋區", "新莊區", "中和區"] if c == "新北市" else ["信義區", "大安區", "內湖區"]
-        btns = [QuickReplyButton(action=MessageAction(label=d, text=f"行政區:{d}")) for d in dists]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"請選 {c} 的行政區：", quick_reply=QuickReply(items=btns)))
+        
+        # 抓取該縣市行政區，如果超過 13 個(QuickReply上限)，這裡建議分組
+        dists = DISTRICT_DATA.get(c, ["市中心"])
+        btns = [QuickReplyButton(action=MessageAction(label=d, text=f"行政區:{d}")) for d in dists[:13]] # 限制前13個
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"請選擇 {c} 的行政區：", quick_reply=QuickReply(items=btns)))
 
-    # C. 行政區 -> 彈性
+    # D. 行政區 -> 彈性 (後面流程與你之前的版本一致...)
     elif msg.startswith("行政區:"):
         d = msg.split(":")[1]
-        conn = sqlite3.connect('ridematch_v7.db')
+        conn = sqlite3.connect('ridematch_v9.db')
         cursor = conn.cursor()
         cursor.execute('UPDATE user_state SET temp_dist = ? WHERE user_id = ?', (d, user_id))
         conn.commit()
@@ -109,6 +143,8 @@ def handle_message(event):
         btns = [QuickReplyButton(action=MessageAction(label="願意彈性", text="彈性:願意")), QuickReplyButton(action=MessageAction(label="不彈性", text="彈性:不願意"))]
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="是否願意彈性比對？(容許時間地點微調)", quick_reply=QuickReply(items=btns)))
 
+    # ... (後面 E, F, G 規範選擇代碼與你 v7 版本相同，不再贅述)
+    # [請保留你 v7 的 彈性:、類別:、規範:、最終確認發布 的邏輯]
     # D. 彈性 -> 啟動「Dauding 標籤循環系統」
     elif msg.startswith("彈性:"):
         f = msg.split(":")[1]
