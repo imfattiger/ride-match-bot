@@ -176,7 +176,7 @@ def handle_message(event):
     # E. 彈性 -> 選單
     elif msg.startswith("彈性:"):
         f = msg.split(":")[1]
-        conn = sqlite3.connect('ridematch_v10.db')
+        conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
         cursor.execute('UPDATE user_state SET temp_flex = ? WHERE user_id = ?', (f, user_id))
         conn.commit()
@@ -264,7 +264,7 @@ def handle_message(event):
     # G. 儲存標籤並循環
     elif msg.startswith("規範:"):
         pref = msg.split(":")[1]
-        conn = sqlite3.connect('ridematch_v10.db')
+        conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
         cursor.execute('SELECT temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
         res = cursor.fetchone()
