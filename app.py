@@ -277,18 +277,39 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, get_main_cat_menu(f"✅ 已選：{pref}\n標籤：{p_str}\n"))
 
     # H. 最終發布 (目的地顯示)
+    # H. 最終發布 (目的地顯示)
     elif msg == "最終確認發布":
         conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
+        # 這裡從 state 抓出暫存資料
         cursor.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
         res = cursor.fetchone()
+        
         if res:
             ut, tt, sc, sd, ec, ed, fx, ps = res
-            cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?)', 
-                           (user_id, ut, tt, sc, sd, ec, ed, fx, ps))
+            # --- 修正處：欄位 10 個，問號也要 10 個，參數也要 10 個 ---
+            # 因為 matches 表有 10 個欄位(含 ID)，但 ID 是自動增加，所以我們填入剩下 9 個
+            cursor.execute('''INSERT INTO matches 
+                (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, flexible, prefs) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+                (user_id, ut, tt, sc, sd, ec, ed, fx, ps))
+            
             conn.commit()
-            summary = f"🚀 行程發布成功！\n\n起點：{sc}{sd}\n終點：{ec}{ed}\n時間：{tt}\n標籤：{ps}"
+            
+            # 組合成功訊息
+            summary = (
+                f"🚀 行程發布成功！\n\n"
+                f"🆔 身分：{'司機' if ut=='driver' else '乘客'}\n"
+                f"📍 起點：{sc}{sd}\n"
+                f"🏁 終點：{ec}{ed}\n"
+                f"🕒 時間：{tt}\n"
+                f"⚙️ 彈性：{fx}\n"
+                f"📝 標籤：{ps if ps else '無'}"
+            )
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 找不到暫存行程，請重新開始。"))
+        
         conn.close()
 
 if __name__ == "__main__":
