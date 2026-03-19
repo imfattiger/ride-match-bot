@@ -275,14 +275,14 @@ def handle_message(event):
     elif msg == "最終確認發布":
         conn = sqlite3.connect('ridematch_v11.db')
         cursor = conn.cursor()
-        cursor.execute('SELECT current_type, temp_time, temp_city, temp_dist, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT current_type, temp_time, temp_scity, temp_sdist, temp_ecity, temp_edist, temp_gender, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
         res = cursor.fetchone()
         if res:
-            ut, tt, ct, dt, fx, ps = res
-            cursor.execute('INSERT INTO matches (user_id, user_type, time_info, city, district, flexible, prefs) VALUES (?, ?, ?, ?, ?, ?, ?)', 
-                           (user_id, ut, tt, ct, dt, fx, ps))
+            ut, tt, sc, sd, ec, ed, gn, fx, ps = res
+            cursor.execute('INSERT INTO matches (user_id, user_type, time_info, start_city, start_dist, end_city, end_dist, gender, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?)', 
+                           (user_id, ut, tt, sc, sd, ec, ed, gn, fx, ps))
             conn.commit()
-            summary = f"🚀 發布成功！\n身分：{ut}\n時間：{tt}\n路線：{ct}{dt}\n標籤：{ps}"
+            summary = f"🚀 行程發布成功！\n\n身分：{ut}\n時間：{tt}\n起點：{sc}{sd}\n終點：{ec}{ed}\n要求：{gn}\n標籤：{ps}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
         conn.close()
 
