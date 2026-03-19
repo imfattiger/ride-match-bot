@@ -12,25 +12,28 @@ from linebot.models import (
 
 app = Flask(__name__)
 
-# --- API 設定 ---
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
-# --- 資料庫初始化 (統一使用 v10) ---
+# --- 2. 資料庫初始化 (統一 v12) ---
 def init_db():
-    conn = sqlite3.connect('ridematch_v10.db')
+    conn = sqlite3.connect('ridematch_v12.db')
     cursor = conn.cursor()
+    # 存檔表：拆分出發與目的地
     cursor.execute('''CREATE TABLE IF NOT EXISTS matches 
         (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, 
-         city TEXT, district TEXT, flexible TEXT, prefs TEXT)''')
+         s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, flexible TEXT, prefs TEXT)''')
+    # 狀態表：新增 step 追蹤目前在選起點還是終點
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_state 
-        (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, temp_city TEXT, temp_dist TEXT, temp_flex TEXT, temp_prefs TEXT)''')
+        (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, 
+         s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, 
+         temp_flex TEXT, temp_prefs TEXT, step TEXT)''')
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- 全台縣市與行政區數據 ---
+# --- 3. 全台數據 (請在此處塞入下方提供的 DISTRICT_DATA) ---
 CITY_DATA = {
     "北部": ["台北市", "新北市", "基隆市", "桃園市", "新竹縣", "新竹市"],
     "中部": ["苗栗縣", "台中市", "彰化縣", "南投縣", "雲林縣"],
@@ -38,25 +41,53 @@ CITY_DATA = {
     "東部": ["宜蘭縣", "花蓮縣", "台東縣"]
 }
 
+# --- 此處插入 DISTRICT_DATA ---
+# [見下方獨立區塊]
 DISTRICT_DATA = {
     "台北市": ["信義區", "大安區", "內湖區", "北投區", "中正區", "萬華區", "中山區", "松山區", "大同區", "南港區", "文山區", "士林區"],
-    "新北市": ["板橋區", "三重區", "中和區", "永和區", "新莊區", "淡水區", "新店區", "土城區", "蘆洲區", "汐止區", "樹林區"],
-    "桃園市": ["桃園區", "中壢區", "平鎮區", "八德區", "楊梅區", "蘆竹區", "龜山區", "龍潭區", "大溪區", "觀音區"],
-    "台中市": ["西屯區", "北屯區", "南屯區", "東區", "南區", "西區", "北區", "大里區", "太平區", "豐原區", "沙鹿區"],
-    "高雄市": ["左營區", "三民區", "新興區", "前鎮區", "苓雅區", "鼓山區", "鳳山區", "楠梓區", "小港區", "左營區"]
-    # 其餘縣市可依此類推增加
+    "新北市": ["板橋區", "三重區", "中和區", "永和區", "新莊區", "淡水區", "新店區", "土城區", "蘆洲區", "汐止區", "樹林區", "五股區", "泰山區"],
+    "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
+    "桃園市": ["桃園區", "中壢區", "平鎮區", "八德區", "楊梅區", "蘆竹區", "龜山區", "龍潭區", "大溪區", "觀音區", "新屋區"],
+    "新竹市": ["東區", "北區", "香山區"],
+    "新竹縣": ["竹北市", "竹東鎮", "新埔鎮", "關西鎮", "湖口鄉", "新豐鄉", "芎林鄉", "寶山鄉"],
+    "苗栗縣": ["苗栗市", "頭份市", "竹南鎮", "後龍鎮", "通霄鎮", "苑裡鎮", "公館鄉"],
+    "台中市": ["西屯區", "北屯區", "南屯區", "東區", "南區", "西區", "北區", "大里區", "太平區", "豐原區", "沙鹿區", "清水區"],
+    "彰化縣": ["彰化市", "員林市", "和美鎮", "鹿港鎮", "溪湖鎮", "二林鎮", "福興鄉", "花壇鄉"],
+    "南投縣": ["南投市", "埔里鎮", "草屯鎮", "竹山鎮", "集集鎮", "名間鄉"],
+    "雲林縣": ["斗六市", "虎尾鎮", "西螺鎮", "土庫鎮", "北港鎮", "古坑鄉"],
+    "嘉義市": ["東區", "西區"],
+    "嘉義縣": ["太保市", "朴子市", "布袋鎮", "大林鎮", "民雄鄉", "水上鄉"],
+    "台南市": ["永康區", "安南區", "東區", "北區", "南區", "安平區", "中西區", "仁德區", "歸仁區"],
+    "高雄市": ["左營區", "三民區", "鳳山區", "楠梓區", "前鎮區", "苓雅區", "鼓山區", "小港區", "新興區", "旗山區", "岡山區"],
+    "屏東縣": ["屏東市", "潮州鎮", "東港鎮", "恆春鎮", "萬丹鄉", "內埔鄉"],
+    "宜蘭縣": ["宜蘭市", "羅東鎮", "蘇澳鎮", "頭城鎮", "礁溪鄉", "冬山鄉", "五結鄉"],
+    "花蓮縣": ["花蓮市", "鳳林鎮", "玉里鎮", "新城鄉", "吉安鄉", "壽豐鄉"],
+    "台東縣": ["台東市", "成功鎮", "關山鎮", "卑南鄉", "鹿野鄉"]
 }
-
-# --- 輔助函數：主選單 ---
+# --- 4. 輔助工具 ---
 def get_main_cat_menu(text_prefix=""):
     items = [
         QuickReplyButton(action=MessageAction(label="🚗 行程/地點", text="類別:行程")),
         QuickReplyButton(action=MessageAction(label="💰 費用相關", text="類別:費用")),
         QuickReplyButton(action=MessageAction(label="🚬 環境規範", text="類別:環境")),
         QuickReplyButton(action=MessageAction(label="💬 乘車氛圍", text="類別:氛圍")),
-        QuickReplyButton(action=MessageAction(label="🚀 好了，發布！", text="最終確認發布"))
+        QuickReplyButton(action=MessageAction(label="🚀 全部選好，發布！", text="最終確認發布"))
     ]
     return TextSendMessage(text=f"{text_prefix}請選擇欲加入的標籤分類：", quick_reply=QuickReply(items=items))
+
+def get_area_carousel(title="請選擇區域"):
+    return TemplateSendMessage(alt_text=title, template=CarouselTemplate(columns=[
+        CarouselColumn(title=title, text='台灣地區', actions=[
+            MessageAction(label='北部', text='區域:北部'),
+            MessageAction(label='中部', text='區域:中部'),
+            MessageAction(label='南部', text='區域:南部')
+        ]),
+        CarouselColumn(title=title, text='其餘地區', actions=[
+            MessageAction(label='東部', text='區域:東部'),
+            MessageAction(label='重新開始', text='我要載客/貨'),
+            MessageAction(label='略過直接發布', text='最終確認發布')
+        ])
+    ]))
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -73,25 +104,12 @@ def handle_postback(event):
     user_id = event.source.user_id
     if event.postback.data == "select_time":
         t = event.postback.params['datetime']
-        conn = sqlite3.connect('ridematch_v10.db')
+        conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
-        cursor.execute('UPDATE user_state SET temp_time = ? WHERE user_id = ?', (t, user_id))
+        cursor.execute('UPDATE user_state SET temp_time = ?, step = "START" WHERE user_id = ?', (t, user_id))
         conn.commit()
         conn.close()
-        
-        cols = [
-            CarouselColumn(title='🗺️ 出發地點', text='請選擇區域', actions=[
-                MessageAction(label='北部 (北北基桃竹)', text='區域:北部'),
-                MessageAction(label='中部 (苗中彰投雲)', text='區域:中部'),
-                MessageAction(label='南部 (嘉南高屏)', text='區域:南部')
-            ]),
-            CarouselColumn(title='🗺️ 出發地點', text='其他區域', actions=[
-                MessageAction(label='東部 (宜花東)', text='區域:東部'),
-                MessageAction(label='離島', text='區域:離島'),
-                MessageAction(label='重新選擇時間', text='我要載客/貨')
-            ])
-        ]
-        line_bot_api.reply_message(event.reply_token, TemplateSendMessage(alt_text='選擇地區', template=CarouselTemplate(columns=cols)))
+        line_bot_api.reply_message(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -101,7 +119,7 @@ def handle_message(event):
     # A. 啟動
     if msg in ["我要載客/貨", "我要搭車/寄物"]:
         ut = 'driver' if "載客" in msg else 'seeker'
-        conn = sqlite3.connect('ridematch_v10.db')
+        conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
         cursor.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_prefs) VALUES (?, ?, ?)', (user_id, ut, ""))
         conn.commit()
@@ -114,32 +132,46 @@ def handle_message(event):
     # B. 區域 -> 縣市
     elif msg.startswith("區域:"):
         area = msg.split(":")[1]
-        cities = CITY_DATA.get(area, ["台北市"])
+        cities = CITY_DATA.get(area, [])
         btns = [QuickReplyButton(action=MessageAction(label=c, text=f"縣市:{c}")) for c in cities]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"已選 {area}，請選擇縣市：", quick_reply=QuickReply(items=btns)))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"已選 {area}，請選縣市：", quick_reply=QuickReply(items=btns)))
 
-    # C. 縣市 -> 行政區
+    # C. 縣市 -> 行政區 (自動判定起迄)
     elif msg.startswith("縣市:"):
         c = msg.split(":")[1]
-        conn = sqlite3.connect('ridematch_v10.db')
+        conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
-        cursor.execute('UPDATE user_state SET temp_city = ? WHERE user_id = ?', (c, user_id))
+        cursor.execute('SELECT step FROM user_state WHERE user_id = ?', (user_id,))
+        step = cursor.fetchone()[0]
+        if step == "START":
+            cursor.execute('UPDATE user_state SET s_city = ? WHERE user_id = ?', (c, user_id))
+        else:
+            cursor.execute('UPDATE user_state SET e_city = ? WHERE user_id = ?', (c, user_id))
         conn.commit()
         conn.close()
         dists = DISTRICT_DATA.get(c, ["市中心"])
-        btns = [QuickReplyButton(action=MessageAction(label=d, text=f"行政區:{d}")) for d in dists[:13]]
+        # QuickReply 上限 13 個，多出的會被捨棄，建議常用放前面
+        btns = [QuickReplyButton(action=MessageAction(label=d, text=f"區:{d}")) for d in dists[:13]]
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"請選擇 {c} 的行政區：", quick_reply=QuickReply(items=btns)))
 
-    # D. 行政區 -> 彈性
-    elif msg.startswith("行政區:"):
+    # D. 行政區 -> 切換到目的地或彈性
+    elif msg.startswith("區:"):
         d = msg.split(":")[1]
-        conn = sqlite3.connect('ridematch_v10.db')
+        conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
-        cursor.execute('UPDATE user_state SET temp_dist = ? WHERE user_id = ?', (d, user_id))
-        conn.commit()
-        conn.close()
-        btns = [QuickReplyButton(action=MessageAction(label="願意彈性", text="彈性:願意")), QuickReplyButton(action=MessageAction(label="不彈性", text="彈性:不願意"))]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="是否願意彈性比對？", quick_reply=QuickReply(items=btns)))
+        cursor.execute('SELECT step FROM user_state WHERE user_id = ?', (user_id,))
+        step = cursor.fetchone()[0]
+        if step == "START":
+            cursor.execute('UPDATE user_state SET s_dist = ?, step = "END" WHERE user_id = ?', (d, user_id))
+            conn.commit()
+            conn.close()
+            line_bot_api.reply_message(event.reply_token, get_area_carousel("🏁 第二步：選擇【目的地】區域"))
+        else:
+            cursor.execute('UPDATE user_state SET e_dist = ? WHERE user_id = ?', (d, user_id))
+            conn.commit()
+            conn.close()
+            btns = [QuickReplyButton(action=MessageAction(label="願意彈性", text="彈性:願意")), QuickReplyButton(action=MessageAction(label="不彈性", text="彈性:不願意"))]
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="起終點設定完成！是否願意彈性比對？", quick_reply=QuickReply(items=btns)))
 
     # E. 彈性 -> 選單
     elif msg.startswith("彈性:"):
@@ -244,18 +276,18 @@ def handle_message(event):
         conn.close()
         line_bot_api.reply_message(event.reply_token, get_main_cat_menu(f"✅ 已選：{pref}\n標籤：{p_str}\n"))
 
-    # H. 最終發布
+    # H. 最終發布 (目的地顯示)
     elif msg == "最終確認發布":
-        conn = sqlite3.connect('ridematch_v10.db')
+        conn = sqlite3.connect('ridematch_v12.db')
         cursor = conn.cursor()
-        cursor.execute('SELECT current_type, temp_time, temp_city, temp_dist, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
         res = cursor.fetchone()
         if res:
-            ut, tt, ct, dt, fx, ps = res
-            cursor.execute('INSERT INTO matches (user_id, user_type, time_info, city, district, flexible, prefs) VALUES (?, ?, ?, ?, ?, ?, ?)', 
-                           (user_id, ut, tt, ct, dt, fx, ps))
+            ut, tt, sc, sd, ec, ed, fx, ps = res
+            cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?)', 
+                           (user_id, ut, tt, sc, sd, ec, ed, fx, ps))
             conn.commit()
-            summary = f"🚀 發布成功！\n身分：{ut}\n時間：{tt}\n路線：{ct}{dt}\n標籤：{ps}"
+            summary = f"🚀 行程發布成功！\n\n起點：{sc}{sd}\n終點：{ec}{ed}\n時間：{tt}\n標籤：{ps}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
         conn.close()
 
