@@ -91,13 +91,15 @@ def get_area_carousel(title="請選擇區域"):
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
+    # 這裡直接呼叫 handler，不要在這裡寫 print(body) 或大動作
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
-    return 'OK'
+    return 'OK' # 這個 OK 必須快速回傳
+
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
