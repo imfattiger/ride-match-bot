@@ -15,7 +15,7 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
-# --- 資料庫初始化 (v13) ---
+# --- 1. 資料庫初始化 (v13) ---
 def init_db():
     conn = sqlite3.connect('ridematch_v13.db')
     cursor = conn.cursor()
@@ -33,7 +33,7 @@ def init_db():
 
 init_db()
 
-# --- 3. 全台數據 (請在此處塞入下方提供的 DISTRICT_DATA) ---
+# --- 2. 數據定義 ---
 CITY_DATA = {
     "北部": ["台北市", "新北市", "基隆市", "桃園市", "新竹縣", "新竹市"],
     "中部": ["苗栗縣", "台中市", "彰化縣", "南投縣", "雲林縣"],
@@ -41,8 +41,6 @@ CITY_DATA = {
     "東部": ["宜蘭縣", "花蓮縣", "台東縣"]
 }
 
-# --- 此處插入 DISTRICT_DATA ---
-# [見下方獨立區塊]
 DISTRICT_DATA = {
     "台北市": ["信義區", "大安區", "內湖區", "北投區", "中正區", "萬華區", "中山區", "松山區", "大同區", "南港區", "文山區", "士林區"],
     "新北市": ["板橋區", "三重區", "中和區", "永和區", "新莊區", "淡水區", "新店區", "土城區", "蘆洲區", "汐止區", "樹林區", "五股區", "泰山區"],
@@ -64,7 +62,8 @@ DISTRICT_DATA = {
     "花蓮縣": ["花蓮市", "鳳林鎮", "玉里鎮", "新城鄉", "吉安鄉", "壽豐鄉"],
     "台東縣": ["台東市", "成功鎮", "關山鎮", "卑南鄉", "鹿野鄉"]
 }
-# --- 4. 輔助工具 ---
+
+# --- 3. 輔助工具 ---
 def get_main_cat_menu(text_prefix=""):
     items = [
         QuickReplyButton(action=MessageAction(label="🚗 行程/地點", text="類別:行程")),
@@ -93,13 +92,11 @@ def get_area_carousel(title="請選擇區域"):
 def callback():
     signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
-    # 這裡直接呼叫 handler，不要在這裡寫 print(body) 或大動作
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
-    return 'OK' # 這個 OK 必須快速回傳
-
+    return 'OK'
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
@@ -138,13 +135,14 @@ def handle_message(event):
         btns = [QuickReplyButton(action=MessageAction(label=c, text=f"縣市:{c}")) for c in cities]
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"已選 {area}，請選縣市：", quick_reply=QuickReply(items=btns)))
 
-    # C. 縣市 -> 行政區 (自動判定起迄)
+    # C. 縣市 -> 行政區
     elif msg.startswith("縣市:"):
         c = msg.split(":")[1]
         conn = sqlite3.connect('ridematch_v13.db')
         cursor = conn.cursor()
         cursor.execute('SELECT step FROM user_state WHERE user_id = ?', (user_id,))
-        step = cursor.fetchone()[0]
+        res = cursor.fetchone()
+        step = res[0] if res else "START"
         if step == "START":
             cursor.execute('UPDATE user_state SET s_city = ? WHERE user_id = ?', (c, user_id))
         else:
@@ -152,29 +150,17 @@ def handle_message(event):
         conn.commit()
         conn.close()
         dists = DISTRICT_DATA.get(c, ["市中心"])
-        # QuickReply 上限 13 個，多出的會被捨棄，建議常用放前面
-        # 在 區: 邏輯的 else (目的地選完) 裡面
-            btns = [
-                QuickReplyButton(action=MessageAction(label="✅ 接受中途", text="中途:接受")),
-                QuickReplyButton(action=MessageAction(label="❌ 僅限起迄", text="中途:不接受")),
-                QuickReplyButton(action=MessageAction(label="🛣️ 順路交流道可", text="中途:限交流道"))
-            ]
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="是否接受中途上下車？", quick_reply=QuickReply(items=btns)))
-    elif msg.startswith("中途:"):
-        conn = sqlite3.connect('ridematch_v13.db')
-        cursor = conn.cursor()
-        cursor.execute('UPDATE user_state SET temp_way = ? WHERE user_id = ?', (msg.split(":")[1], user_id))
-        conn.commit()
-        conn.close()
-        btns = [QuickReplyButton(action=MessageAction(label=f"{i}人", text=f"人數:{i}")) for i in range(1, 9)]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請選擇提供/需求的位子人數：", quick_reply=QuickReply(items=btns)))
-    # D. 行政區 -> 切換到目的地或彈性
+        btns = [QuickReplyButton(action=MessageAction(label=d, text=f"區:{d}")) for d in dists[:13]]
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"請選擇 {c} 的行政區：", quick_reply=QuickReply(items=btns)))
+
+    # D. 行政區 -> 下一步 (判斷是要選目的地還是選中途)
     elif msg.startswith("區:"):
         d = msg.split(":")[1]
         conn = sqlite3.connect('ridematch_v13.db')
         cursor = conn.cursor()
         cursor.execute('SELECT step FROM user_state WHERE user_id = ?', (user_id,))
-        step = cursor.fetchone()[0]
+        res = cursor.fetchone()
+        step = res[0] if res else "START"
         if step == "START":
             cursor.execute('UPDATE user_state SET s_dist = ?, step = "END" WHERE user_id = ?', (d, user_id))
             conn.commit()
@@ -184,10 +170,49 @@ def handle_message(event):
             cursor.execute('UPDATE user_state SET e_dist = ? WHERE user_id = ?', (d, user_id))
             conn.commit()
             conn.close()
-            btns = [QuickReplyButton(action=MessageAction(label="願意彈性", text="彈性:願意")), QuickReplyButton(action=MessageAction(label="不彈性", text="彈性:不願意"))]
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="起終點設定完成！是否願意彈性比對？", quick_reply=QuickReply(items=btns)))
+            btns = [
+                QuickReplyButton(action=MessageAction(label="✅ 接受中途", text="中途:接受")),
+                QuickReplyButton(action=MessageAction(label="❌ 僅限起迄", text="中途:不接受")),
+                QuickReplyButton(action=MessageAction(label="🛣️ 交流道可", text="中途:限交流道"))
+            ]
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="是否接受中途上下車？", quick_reply=QuickReply(items=btns)))
 
-    # E. 彈性 -> 選單
+    # E. 中途 -> 人數
+    elif msg.startswith("中途:"):
+        conn = sqlite3.connect('ridematch_v13.db')
+        cursor = conn.cursor()
+        cursor.execute('UPDATE user_state SET temp_way = ? WHERE user_id = ?', (msg.split(":")[1], user_id))
+        conn.commit()
+        conn.close()
+        btns = [QuickReplyButton(action=MessageAction(label=f"{i}人", text=f"人數:{i}")) for i in range(1, 5)]
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請選擇人數：", quick_reply=QuickReply(items=btns)))
+
+    # F. 人數 -> 費用
+    elif msg.startswith("人數:"):
+        conn = sqlite3.connect('ridematch_v13.db')
+        cursor = conn.cursor()
+        cursor.execute('UPDATE user_state SET temp_count = ? WHERE user_id = ?', (msg.split(":")[1], user_id))
+        conn.commit()
+        conn.close()
+        btns = [
+            QuickReplyButton(action=MessageAction(label="💰 私訊議價", text="費用:私訊議價")),
+            QuickReplyButton(action=MessageAction(label="☕ 咖啡飲料", text="費用:請喝飲料")),
+            QuickReplyButton(action=MessageAction(label="💵 固定金額", text="費用:面議/固定")),
+            QuickReplyButton(action=MessageAction(label="🆓 免費公益", text="費用:免費"))
+        ]
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="分攤方式：", quick_reply=QuickReply(items=btns)))
+
+    # G. 費用 -> 彈性
+    elif msg.startswith("費用:"):
+        conn = sqlite3.connect('ridematch_v13.db')
+        cursor = conn.cursor()
+        cursor.execute('UPDATE user_state SET temp_fee = ? WHERE user_id = ?', (msg.split(":")[1], user_id))
+        conn.commit()
+        conn.close()
+        btns = [QuickReplyButton(action=MessageAction(label="願意彈性", text="彈性:願意")), QuickReplyButton(action=MessageAction(label="不彈性", text="彈性:不願意"))]
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="起終點設定完成！是否願意彈性比對？", quick_reply=QuickReply(items=btns)))
+
+    # H. 彈性 -> 選單
     elif msg.startswith("彈性:"):
         f = msg.split(":")[1]
         conn = sqlite3.connect('ridematch_v13.db')
@@ -195,7 +220,7 @@ def handle_message(event):
         cursor.execute('UPDATE user_state SET temp_flex = ? WHERE user_id = ?', (f, user_id))
         conn.commit()
         conn.close()
-        line_bot_api.reply_message(event.reply_token, get_main_cat_menu("最後一步：自定義規範。\n"))
+        line_bot_api.reply_message(event.reply_token, get_main_cat_menu("最後一步：自定義規範。"))
 
     # F. 規範大類展示 (Carousel)
     elif msg.startswith("類別:"):
@@ -290,57 +315,35 @@ def handle_message(event):
         conn.close()
         line_bot_api.reply_message(event.reply_token, get_main_cat_menu(f"✅ 已選：{pref}\n標籤：{p_str}\n"))
 
-    elif msg.startswith("人數:"):
-    conn = sqlite3.connect('ridematch_v13.db')
-    cursor = conn.cursor()
-    cursor.execute('UPDATE user_state SET temp_count = ? WHERE user_id = ?', (msg.split(":")[1], user_id))
-    conn.commit()
-    conn.close()
-    btns = [
-        QuickReplyButton(action=MessageAction(label="💰 私訊議價", text="費用:私訊議價")),
-        QuickReplyButton(action=MessageAction(label="☕ 咖啡/小食", text="費用:請喝飲料")),
-        QuickReplyButton(action=MessageAction(label="💵 固定金額", text="費用:面議/固定")),
-        QuickReplyButton(action=MessageAction(label="🆓 免費公益", text="費用:免費"))
-    ]
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text="費用分攤方式：", quick_reply=QuickReply(items=btns)))
-    # H. 最終發布 (目的地顯示)
-    # H. 最終發布 (目的地顯示)
+    # I. 最終發布
     elif msg == "最終確認發布":
         conn = sqlite3.connect('ridematch_v13.db')
         cursor = conn.cursor()
-        # 這裡從 state 抓出暫存資料
-        cursor.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
+        cursor.execute('''SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, 
+                          temp_way, temp_count, temp_fee, temp_flex, temp_prefs 
+                          FROM user_state WHERE user_id = ?''', (user_id,))
         res = cursor.fetchone()
-        
         if res:
-            ut, tt, sc, sd, ec, ed, fx, ps = res
-            # --- 修正處：欄位 10 個，問號也要 10 個，參數也要 10 個 ---
-            # 因為 matches 表有 10 個欄位(含 ID)，但 ID 是自動增加，所以我們填入剩下 9 個
+            # 這裡總共 11 個欄位，對應 SQL 的 11 個問號
             cursor.execute('''INSERT INTO matches 
-                (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, flexible, prefs) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                (user_id, ut, tt, sc, sd, ec, ed, fx, ps))
-            
+                (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (user_id, *res))
             conn.commit()
-            
-            # 組合成功訊息
+            ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
             summary = (
-                f"✨ 【共乘發布確認】 ✨\n"
+                f"✨ 【共乘發布成功】 ✨\n"
                 f"━━━━━━━━━━━━━━━\n"
-                f"👤 身分：{'🚗 司機載客/貨' if ut=='driver' else '🙋 乘客搭車/寄物'}\n"
+                f"👤 身分：{'🚗 司機' if ut=='driver' else '🙋 乘客'}\n"
                 f"📅 時間：{tt}\n"
-                f"📍 路線：{sc}{sd} ➔ {ec}{ed}\n"
+                f"📍 起點：{sc}{sd}\n"
+                f"🏁 終點：{ec}{ed}\n"
                 f"🛣️ 中途：{wy}\n"
                 f"👥 人數：{pc} 人\n"
                 f"💰 費用：{fe}\n"
-                f"━━━━━━━━━━━━━━━\n"
-                f"💡 規範備註：\n{ps if ps else '尚未設定標籤'}\n"
-                f"✨ 彈性：{fx}"
+                f"📝 規範：{ps if ps else '無'}\n"
+                f"⚙️ 彈性：{fx}"
             )
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
-        else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 找不到暫存行程，請重新開始。"))
-        
         conn.close()
 
 if __name__ == "__main__":
