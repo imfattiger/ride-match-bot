@@ -315,6 +315,32 @@ def handle_message(event):
         conn.close()
         line_bot_api.reply_message(event.reply_token, get_main_cat_menu(f"✅ 已選：{pref}\n標籤：{p_str}\n"))
 
+    # --- 將函式定義移到這裡 (handle_message 之外) ---
+def find_matches_advanced(user_id, current_type, s_city, e_city, time_info, way_point):
+    target_type = 'seeker' if current_type == 'driver' else 'driver'
+    date_str = time_info[:10] if time_info else ""
+    
+    conn = sqlite3.connect('ridematch_v13.db')
+    cursor = conn.cursor()
+    
+    query = '''SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee 
+               FROM matches 
+               WHERE user_type = ? AND time_info LIKE ? AND user_id != ?'''
+    params = [target_type, f"{date_str}%", user_id]
+
+    if current_type == 'driver' and "接受" in way_point:
+        query += " AND (s_city = ? OR e_city = ?)"
+        params.extend([s_city, e_city])
+    else:
+        query += " AND s_city = ? AND e_city = ?"
+        params.extend([s_city, e_city])
+
+    cursor.execute(query + " ORDER BY id DESC LIMIT 5", params)
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+# --- 原本的 handle_message 結尾部分 ---
     # I. 最終發布
     elif msg == "最終確認發布":
         conn = sqlite3.connect('ridematch_v13.db')
@@ -323,13 +349,19 @@ def handle_message(event):
                           temp_way, temp_count, temp_fee, temp_flex, temp_prefs 
                           FROM user_state WHERE user_id = ?''', (user_id,))
         res = cursor.fetchone()
+        
         if res:
-            # 這裡總共 11 個欄位，對應 SQL 的 11 個問號
+            ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
+            # 1. 存入資料庫
             cursor.execute('''INSERT INTO matches 
                 (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (user_id, *res))
             conn.commit()
-            ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
+            
+            # 2. 執行配對 (呼叫上面的函式)
+            match_results = find_matches_advanced(user_id, ut, sc, ec, tt, wy)
+            
+            # 3. 組合發布成功的摘要
             summary = (
                 f"✨ 【共乘發布成功】 ✨\n"
                 f"━━━━━━━━━━━━━━━\n"
@@ -337,13 +369,27 @@ def handle_message(event):
                 f"📅 時間：{tt}\n"
                 f"📍 起點：{sc}{sd}\n"
                 f"🏁 終點：{ec}{ed}\n"
-                f"🛣️ 中途：{wy}\n"
-                f"👥 人數：{pc} 人\n"
+                f"🛣️ 中途：{wy} | 👥 {pc}人\n"
                 f"💰 費用：{fe}\n"
-                f"📝 規範：{ps if ps else '無'}\n"
-                f"⚙️ 彈性：{fx}"
+                f"📝 規範：{ps if ps else '無'}"
             )
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
+            
+            # 4. 準備回覆訊息
+            output_messages = [TextSendMessage(text=summary)]
+            
+            if match_results:
+                match_text = "🎯 【系統偵測到匹配對象！】\n"
+                for m in match_results:
+                    # m 結構: (user_id, time_info, s_city, s_dist, e_city, e_dist, fee)
+                    role = "司機" if ut == "seeker" else "乘客"
+                    match_text += f"━━━━━━━━━━━━━━━\n👤 匹配{role}\n🕙 {m[1][5:16]}\n📍 {m[2]}{m[3]}➔{m[4]}{m[5]}\n💰 {m[6]}\n"
+                match_text += "\n💡 提示：請至社團搜尋日期地點聯繫！"
+                output_messages.append(TextSendMessage(text=match_text))
+            else:
+                output_messages.append(TextSendMessage(text="🔎 目前暫無精準匹配，系統將持續監測。"))
+
+            line_bot_api.reply_message(event.reply_token, output_messages)
+            
         conn.close()
 
 if __name__ == "__main__":
