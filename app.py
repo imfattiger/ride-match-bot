@@ -316,6 +316,8 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, get_main_cat_menu(f"✅ 已選：{pref}\n標籤：{p_str}\n"))
 
     # I. 最終發布 (這裡的 elif 要跟上面的 elif 對齊！！)
+    
+    # I. 最終發布 (這裡的 elif 要跟上面的 elif 對齊！！)
     elif msg == "最終確認發布":
         conn = sqlite3.connect('ridematch_v13.db')
         cursor = conn.cursor()
@@ -323,7 +325,11 @@ def handle_message(event):
                           temp_way, temp_count, temp_fee, temp_flex, temp_prefs 
                           FROM user_state WHERE user_id = ?''', (user_id,))
         res = cursor.fetchone()
-        
+        try:
+                profile = line_bot_api.get_profile(user_id)
+                user_name = profile.display_name
+            except:
+                user_name = "一位神秘用戶"
         if res:
             ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
             cursor.execute('''INSERT INTO matches 
@@ -332,7 +338,7 @@ def handle_message(event):
             conn.commit()
             
             # 呼叫配對函式
-            match_results = find_matches_advanced(user_id, ut, sc, ec, tt, wy)
+            match_results = find_matches_advanced(user_id, ut, sc, ec, tt, wy, fx)
             
             summary = (
                 f"✨ 【共乘發布成功】 ✨\n"
@@ -351,32 +357,66 @@ def handle_message(event):
             if match_results:
                 match_text = "🎯 【系統偵測到匹配對象！】\n"
                 for m in match_results:
-                    role = "司機" if ut == "seeker" else "乘客"
-                    match_text += f"━━━━━━━━━━━━━━━\n👤 匹配{role}\n🕙 {m[1][5:16]}\n📍 {m[2]}{m[3]}➔{m[4]}{m[5]}\n💰 {m[6]}\n"
+                    target_uid = m[0]  # 對方的 user_id
+                    role_name = "司機" if ut == "seeker" else "乘客"
+                    
+                    # 組合給「發文者」的結果清單
+                    match_text += f"━━━━━━━━━━━━━━━\n👤 匹配{role_name}\n🕙 {m[1][5:16]}\n📍 {m[2]}{m[3]}➔{m[4]}{m[5]}\n💰 {m[6]}\n"
+                    
+                    # --- 【PUSH MESSAGE 就在這裡！】 ---
+                    try:
+                        push_content = (
+                            f"🔔 系統通知：有人匹配您的行程！\n"
+                            f"👤 來自：{user_name} ({'🚗司機' if ut=='driver' else '🙋乘客'})\n"
+                            f"📅 時間：{tt}\n"
+                            f"📍 路線：{sc}{sd} ➔ {ec}{ed}\n"
+                            f"💬 快去社團搜尋對方，或等待對方私訊！"
+                        )
+                        line_bot_api.push_message(target_uid, TextSendMessage(text=push_content))
+                    except Exception as e:
+                        print(f"推播失敗：{e}") # 通常是對方封鎖了機器人
+
                 match_text += "\n💡 提示：請至社團搜尋日期地點聯繫！"
                 output_messages.append(TextSendMessage(text=match_text))
-            else:
-                output_messages.append(TextSendMessage(text="🔎 目前暫無精準匹配，系統將持續監測。"))
-
+            
             line_bot_api.reply_message(event.reply_token, output_messages)
-        conn.close()
 
-# --- 重要！將函式定義移到 handle_message 函式外面 (最左邊，不縮進) ---
-def find_matches_advanced(user_id, current_type, s_city, e_city, time_info, way_point):
+# --- 這個函式要在 handle_message 之外，最左邊 ---
+def find_matches_advanced(user_id, current_type, s_city, e_city, time_info, way_point, flexible):
     target_type = 'seeker' if current_type == 'driver' else 'driver'
-    date_str = time_info[:10] if time_info else ""
     conn = sqlite3.connect('ridematch_v13.db')
     cursor = conn.cursor()
-    query = '''SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee 
+
+    # 處理時間彈性：如果是 2026-03-20T18:00
+    try:
+        base_time = datetime.strptime(time_info, "%Y-%m-%dT%H:%M")
+        if "願意" in flexible:
+            # 願意彈性：前後推 2 小時
+            start_t = (base_time - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+            end_t = (base_time + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+            time_filter = "AND time_info BETWEEN ? AND ?"
+            time_params = [start_t, end_t]
+        else:
+            # 不願意：抓同一天
+            time_filter = "AND time_info LIKE ?"
+            time_params = [f"{time_info[:10]}%"]
+    except:
+        # 防錯：如果格式不對就抓同一天
+        time_filter = "AND time_info LIKE ?"
+        time_params = [f"{time_info[:10]}%"]
+
+    query = f'''SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee 
                FROM matches 
-               WHERE user_type = ? AND time_info LIKE ? AND user_id != ?'''
-    params = [target_type, f"{date_str}%", user_id]
+               WHERE user_type = ? {time_filter} AND user_id != ?'''
+    params = [target_type] + time_params + [user_id]
+
     if current_type == 'driver' and "接受" in way_point:
         query += " AND (s_city = ? OR e_city = ?)"
         params.extend([s_city, e_city])
     else:
         query += " AND s_city = ? AND e_city = ?"
         params.extend([s_city, e_city])
+
     cursor.execute(query + " ORDER BY id DESC LIMIT 5", params)
     results = cursor.fetchall()
     conn.close()
