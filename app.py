@@ -142,7 +142,7 @@ def get_area_carousel(title="請選擇區域"):
     ]))
 
 # --- 5. 核心匹配演算法 (結合權重與彈性時間) ---
-def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point):
+def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_count):
     target_type = 'seeker' if utype == 'driver' else 'driver'
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -156,23 +156,61 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point):
     except:
         s_range, e_range = t_info, t_info
 
-    # 2. 【核心升級】方向性判斷
+    # 2. 方向性與權重
     s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
-    user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0) # 1:南下, -1:北上, 0:同縣市
+    user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
     
-    query = "SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee FROM matches WHERE user_type = ? AND user_id != ? AND time_info BETWEEN ? AND ?"
+    # 3. 基礎查詢 (類型、時間、非本人)
+    query = "SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count FROM matches WHERE user_type = ? AND user_id != ? AND time_info BETWEEN ? AND ?"
     params = [target_type, user_id, s_range, e_range]
     
-    # 3. 路線比對邏輯
-    if utype == 'driver' and "接受" in way_point:
-        query += " AND (s_city = ? OR e_city = ?)"
-        params.extend([sc, ec])
-    else:
-        query += " AND s_city = ? AND e_city = ?"
-        params.extend([sc, ec])
-
-    c.execute(query + " ORDER BY created_at DESC", params)
+    c.execute(query, params)
     raw_res = c.fetchall()
+    
+    final_matches = []
+    user_p = int(p_count) # 當前發布者的人數需求/供給
+
+    for m in raw_res:
+        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc = m
+        m_s_w, m_e_w = CITY_WEIGHTS.get(m_sc, 0), CITY_WEIGHTS.get(m_ec, 0)
+        match_direction = 1 if m_e_w > m_s_w else (-1 if m_e_w < m_s_w else 0)
+        match_p = int(m_pc)
+
+        # A. 方向檢查：必須同向
+        if user_direction != match_direction:
+            continue
+            
+        # B. 人數檢查：如果是司機發布，找人少的乘客；如果是乘客發布，找人多的司機
+        if utype == 'driver' and user_p < match_p: continue # 司機位子不夠
+        if utype == 'seeker' and user_p > match_p: continue # 司機位子不夠
+
+        # C. 站點檢查 (包含中途邏輯)
+        # 司機 = D, 乘客 = S
+        is_match = False
+        if utype == 'driver':
+            d_s_w, d_e_w = s_w, e_w
+            s_s_w, s_e_w = m_s_w, m_e_w
+            d_way = way_point
+        else:
+            d_s_w, d_e_w = m_s_w, m_e_w
+            s_s_w, s_e_w = s_w, e_w
+            d_way = m_way
+
+        # 如果司機接受中途：乘客的起迄權重必須在司機權重範圍內
+        if "接受" in d_way:
+            if user_direction == 1: # 南下 (權重增加)
+                if d_s_w <= s_s_w and s_e_w <= d_e_w: is_match = True
+            else: # 北上 (權重減少)
+                if d_s_w >= s_s_w and s_e_w >= d_e_w: is_match = True
+        else:
+            # 不接受中途：起訖縣市必須完全一樣
+            if sc == m_sc and ec == m_ec: is_match = True
+        
+        if is_match:
+            final_matches.append(m)
+            
+    conn.close()
+    return final_matches[:5]
     
     # 4. 【核心升級】過濾掉「反方向」的行程
     final_matches = []
@@ -430,13 +468,13 @@ def handle_message(event):
         # 1. 存入正式表並取得自動生成的 ID
         cursor = conn.cursor()
         cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (uid, *res))
-        new_id = cursor.lastrowid # 取得新行程的 ID
+        new_id = cursor.lastrowid
         conn.commit()
         conn.close()
         
-        # 2. 執行強化後的匹配邏輯 (方向性比對)
+        # 2. 執行強化後的匹配邏輯 (注意這裡傳入了最後一個參數 pc)
         ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
-        m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy)
+        m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc) # <--- 修改這行
         
         # 3. 準備回覆內容
         # 第一個回覆：專業的 Flex 卡片
