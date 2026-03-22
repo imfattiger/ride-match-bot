@@ -2,13 +2,14 @@ import os
 import sqlite3
 import logging
 from datetime import datetime, timedelta
+from urllib.parse import parse_qsl
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, 
     QuickReply, QuickReplyButton, MessageAction, 
-    DatetimePickerAction, PostbackEvent,
+    DatetimePickerAction, PostbackEvent,PostbackAction,
     TemplateSendMessage, CarouselTemplate, CarouselColumn
 )
 
@@ -151,11 +152,63 @@ def handle_postback(event):
         conn.execute('UPDATE user_state SET temp_time = ?, step = "START" WHERE user_id = ?', (t, uid))
         conn.commit(); conn.close()
         line_bot_api.reply_message(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
-
+        
+    elif data.startswith("action=delete"):
+        # 解析 data 內容，例如從 "action=delete&id=10" 提取出 id=10
+        params = dict(parse_qsl(data))
+        match_id = params.get('id')
+        
+        conn = sqlite3.connect(DB_NAME)
+        # 安全檢查：同時比對 id 與 user_id，確保不會刪到別人的行程
+        conn.execute('DELETE FROM matches WHERE id = ? AND user_id = ?', (match_id, uid))
+        conn.commit(); conn.close()
+        
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🗑️ 已成功刪除行程 (編號: {match_id})"))
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
     uid = event.source.user_id
+
+    if msg == "我的行程":
+        conn = sqlite3.connect(DB_NAME)
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        # 找出該用戶尚未過期的行程
+        my_matches = conn.execute(
+            'SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type FROM matches WHERE user_id = ? AND time_info >= ? ORDER BY time_info ASC LIMIT 10', 
+            (uid, now)
+        ).fetchall()
+        conn.close()
+
+        if not my_matches:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="📭 您目前沒有生效中的行程。"))
+        else:
+            cols = []
+            for m in my_matches:
+                m_id, t_info, sc, sd, ec, ed, utype = m
+                role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
+                cols.append(CarouselColumn(
+                    title=f"{role} | {t_info[5:16]}",
+                    text=f"📍 {sc}{sd} ➔ {ec}{ed}",
+                    actions=[
+                        PostbackAction(label='❌ 刪除此行程', data=f"action=delete&id={m_id}")
+                    ]
+                ))
+            line_bot_api.reply_message(event.reply_token, [
+                TextSendMessage(text="📋 以下是您的近期行程："),
+                TemplateSendMessage(alt_text="行程管理", template=CarouselTemplate(columns=cols))
+            ])
+        return # 處理完「我的行程」就結束，不用跑後面的邏輯
+
+    elif msg == "媒合規則":
+        rules = (
+            "⚖️ 【媒合規則說明】\n\n"
+            "1. 時段匹配：根據您的彈性選擇，搜尋前後 1~4 小時內的行程。\n"
+            "2. 路線匹配：起訖點縣市必須一致。司機若開啟「接受中途」，系統會增加媒合機會。\n"
+            "3. 自動通知：新行程符合條件時，系統會主動推播通知雙方。\n"
+            "4. 過期機制：行程時間超過 24 小時後將自動隱藏。"
+        )
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=rules))
+        return
 
     if msg in ["我要載客/貨", "我要搭車/寄物"]:
         clean_expired_matches()
