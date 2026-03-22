@@ -146,20 +146,24 @@ def callback():
 @handler.add(PostbackEvent)
 def handle_postback(event):
     uid = event.source.user_id
-    if event.postback.data == "select_time":
+    # --- 關鍵修正：先定義 data 變數 ---
+    data = event.postback.data 
+    
+    if data == "select_time":
         t = event.postback.params['datetime']
         conn = sqlite3.connect(DB_NAME)
         conn.execute('UPDATE user_state SET temp_time = ?, step = "START" WHERE user_id = ?', (t, uid))
         conn.commit(); conn.close()
         line_bot_api.reply_message(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
         
+    # --- 這裡原本因為找不到 data 會報錯，現在修好了 ---
     elif data.startswith("action=delete"):
-        # 解析 data 內容，例如從 "action=delete&id=10" 提取出 id=10
+        # 解析 data 內容
         params = dict(parse_qsl(data))
         match_id = params.get('id')
         
         conn = sqlite3.connect(DB_NAME)
-        # 安全檢查：同時比對 id 與 user_id，確保不會刪到別人的行程
+        # 安全檢查：同時比對 id 與 user_id
         conn.execute('DELETE FROM matches WHERE id = ? AND user_id = ?', (match_id, uid))
         conn.commit(); conn.close()
         
