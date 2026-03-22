@@ -16,14 +16,26 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
-# --- 1. 資料庫初始化 ---
+# --- 1. 縣市權重表 (用於判定方向與跨縣市邏輯) ---
+# 由北向南排序，用於計算方向權重
+CITY_WEIGHTS = {
+    "基隆市": 1, "台北市": 2, "新北市": 3, "桃園市": 4, 
+    "新竹縣": 5, "新竹市": 5, "苗栗縣": 6, "台中市": 7, 
+    "彰化縣": 8, "南投縣": 9, "雲林縣": 10, "嘉義縣": 11, 
+    "嘉義市": 11, "台南市": 12, "高雄市": 13, "屏東縣": 14,
+    "宜蘭縣": 15, "花蓮縣": 16, "台東縣": 17
+}
+
+# --- 2. 資料庫初始化 ---
 def init_db():
     conn = sqlite3.connect('ridematch_v13.db')
     cursor = conn.cursor()
+    # 存儲正式行程
     cursor.execute('''CREATE TABLE IF NOT EXISTS matches 
         (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, 
          s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, 
-         way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT)''')
+         way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    # 存儲用戶操作狀態
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_state 
         (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, 
          s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, 
@@ -33,6 +45,45 @@ def init_db():
     conn.close()
 
 init_db()
+
+# --- 3. 核心匹配演算法 (資深版) ---
+def find_matches_v14(user_id, utype, sc, sd, ec, ed, t_info, flex):
+    target_type = 'seeker' if utype == 'driver' else 'driver'
+    conn = sqlite3.connect('ridematch_v13.db')
+    cursor = conn.cursor()
+
+    # A. 時間窗口計算
+    base_t = datetime.strptime(t_info, "%Y-%m-%dT%H:%M")
+    # 預設寬容度 1 小時，若選願意則擴大到 12 小時
+    buffer_hours = 12 if "願意" in flex else 1
+    start_range = (base_t - timedelta(hours=buffer_hours)).strftime("%Y-%m-%dT%H:%M")
+    end_range = (base_t + timedelta(hours=buffer_hours)).strftime("%Y-%m-%dT%H:%M")
+
+    # B. 方向判定 (1: 南下/東向, -1: 北上/西向, 0: 同城)
+    s_w = CITY_WEIGHTS.get(sc, 0)
+    e_w = CITY_WEIGHTS.get(ec, 0)
+    direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
+
+    # C. SQL 基礎查詢
+    query = '''SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, flexible 
+               FROM matches 
+               WHERE user_type = ? AND user_id != ? AND time_info BETWEEN ? AND ?'''
+    params = [target_type, user_id, start_range, end_range]
+
+    # D. 空間過濾邏輯
+    if direction == 0:
+        # 同縣市：行政區起點或終點有交集即視為順路
+        query += " AND s_city = ? AND (s_dist = ? OR e_dist = ?)"
+        params.extend([sc, sd, ed])
+    else:
+        # 跨縣市：嚴格比對起終點城市 (確保方向一致)
+        query += " AND s_city = ? AND e_city = ?"
+        params.extend([sc, ec])
+
+    cursor.execute(query + " ORDER BY created_at DESC LIMIT 5", params)
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 # --- 2. 數據定義 ---
 CITY_DATA = {
@@ -78,61 +129,19 @@ def get_main_cat_menu(text_prefix=""):
 def get_area_carousel(title="請選擇區域"):
     return TemplateSendMessage(alt_text=title, template=CarouselTemplate(columns=[
         CarouselColumn(title=title, text='台灣地區', actions=[
-            MessageAction(label='北部', text='區域:北部'),
-            MessageAction(label='中部', text='區域:中部'),
-            MessageAction(label='南部', text='區域:南部')
+            MessageAction(label='北部', text='區域:北部'), MessageAction(label='中部', text='區域:中部'), MessageAction(label='南部', text='區域:南部')
         ]),
         CarouselColumn(title=title, text='其餘地區', actions=[
-            MessageAction(label='東部', text='區域:東部'),
-            MessageAction(label='重新開始', text='我要載客/貨'),
-            MessageAction(label='略過直接發布', text='最終確認發布')
+            MessageAction(label='東部', text='區域:東部'), MessageAction(label='重新開始', text='我要載客/貨'), MessageAction(label='略過直接發布', text='最終確認發布')
         ])
     ]))
-
-def find_matches_advanced(user_id, current_type, s_city, e_city, time_info, way_point, flexible):
-    target_type = 'seeker' if current_type == 'driver' else 'driver'
-    conn = sqlite3.connect('ridematch_v13.db')
-    cursor = conn.cursor()
-
-    try:
-        base_time = datetime.strptime(time_info, "%Y-%m-%dT%H:%M")
-        if "願意" in flexible:
-            start_t = (base_time - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
-            end_t = (base_time + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
-            time_filter = "AND time_info BETWEEN ? AND ?"
-            time_params = [start_t, end_t]
-        else:
-            time_filter = "AND time_info LIKE ?"
-            time_params = [f"{time_info[:10]}%"]
-    except:
-        time_filter = "AND time_info LIKE ?"
-        time_params = [f"{time_info[:10]}%"]
-
-    query = f'''SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee 
-               FROM matches 
-               WHERE user_type = ? {time_filter} AND user_id != ?'''
-    params = [target_type] + time_params + [user_id]
-
-    if current_type == 'driver' and "接受" in way_point:
-        query += " AND (s_city = ? OR e_city = ?)"
-        params.extend([s_city, e_city])
-    else:
-        query += " AND s_city = ? AND e_city = ?"
-        params.extend([s_city, e_city])
-
-    cursor.execute(query + " ORDER BY id DESC LIMIT 5", params)
-    results = cursor.fetchall()
-    conn.close()
-    return results
 
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
+    try: handler.handle(body, signature)
+    except InvalidSignatureError: abort(400)
     return 'OK'
 
 @handler.add(PostbackEvent)
@@ -152,6 +161,7 @@ def handle_message(event):
     msg = event.message.text
     user_id = event.source.user_id
 
+    # [1. 初始流程：身分/時間/地點 - 與原邏輯結構一致，確保穩定性]
     if msg in ["我要載客/貨", "我要搭車/寄物"]:
         ut = 'driver' if "載客" in msg else 'seeker'
         conn = sqlite3.connect('ridematch_v13.db')
@@ -159,10 +169,7 @@ def handle_message(event):
         cursor.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_prefs) VALUES (?, ?, ?)', (user_id, ut, ""))
         conn.commit()
         conn.close()
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請選擇日期時間：",
-            quick_reply=QuickReply(items=[QuickReplyButton(action=DatetimePickerAction(label="🕒 點我選擇", data="select_time", mode="datetime"))])
-        ))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請選擇日期時間：", quick_reply=QuickReply(items=[QuickReplyButton(action=DatetimePickerAction(label="🕒 點我選擇", data="select_time", mode="datetime"))])))))
 
     elif msg.startswith("區域:"):
         area = msg.split(":")[1]
@@ -345,67 +352,47 @@ def handle_message(event):
     elif msg == "最終確認發布":
         conn = sqlite3.connect('ridematch_v13.db')
         cursor = conn.cursor()
-        cursor.execute('''SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, 
-                          temp_way, temp_count, temp_fee, temp_flex, temp_prefs 
-                          FROM user_state WHERE user_id = ?''', (user_id,))
+        cursor.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (user_id,))
         res = cursor.fetchone()
         
-        # 獲取發文者名字
+        if not res: return # 防止空資料發布
+
         try:
             profile = line_bot_api.get_profile(user_id)
             user_name = profile.display_name
-        except:
-            user_name = "一位神秘用戶"
+        except: user_name = "一位神秘用戶"
 
-        if res:
-            ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
-            cursor.execute('''INSERT INTO matches 
-                (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (user_id, *res))
-            conn.commit()
-            
-            match_results = find_matches_advanced(user_id, ut, sc, ec, tt, wy, fx)
-            
-            summary = (
-                f"✨ 【共乘發布成功】 ✨\n"
-                f"━━━━━━━━━━━━━━━\n"
-                f"👤 身分：{'🚗 司機' if ut=='driver' else '🙋 乘客'}\n"
-                f"📅 時間：{tt}\n"
-                f"📍 起點：{sc}{sd}\n"
-                f"🏁 終點：{ec}{ed}\n"
-                f"🛣️ 中途：{wy} | 👥 {pc}人\n"
-                f"💰 費用：{fe}\n"
-                f"📝 規範：{ps if ps else '無'}"
-            )
-            
-            output_messages = [TextSendMessage(text=summary)]
-            
-            if match_results:
-                match_text = "🎯 【系統偵測到匹配對象！】\n"
-                for m in match_results:
-                    target_uid = m[0]
-                    role_name = "司機" if ut == "seeker" else "乘客"
-                    match_text += f"━━━━━━━━━━━━━━━\n👤 匹配{role_name}\n🕙 {m[1][5:16]}\n📍 {m[2]}{m[3]}➔{m[4]}{m[5]}\n💰 {m[6]}\n"
-                    
-                    # 雙向推播通知
-                    try:
-                        push_content = (
-                            f"🔔 系統通知：有人匹配您的行程！\n"
-                            f"👤 來自：{user_name} ({'🚗司機' if ut=='driver' else '🙋乘客'})\n"
-                            f"📅 時間：{tt}\n"
-                            f"📍 路線：{sc}{sd} ➔ {ec}{ed}\n"
-                            f"💬 快去社團搜尋對方聯絡吧！"
-                        )
-                        line_bot_api.push_message(target_uid, TextSendMessage(text=push_content))
-                    except:
-                        pass
+        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
+        # 存入正式庫
+        cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (user_id, *res))
+        conn.commit()
 
-                match_text += "\n💡 提示：請至社團搜尋日期地點聯繫！"
-                output_messages.append(TextSendMessage(text=match_text))
-            else:
-                output_messages.append(TextSendMessage(text="🔎 目前暫無精準匹配，系統將持續監測。"))
+        # 呼叫資深版匹配邏輯
+        match_results = find_matches_v14(user_id, ut, sc, sd, ec, ed, tt, fx)
 
-            line_bot_api.reply_message(event.reply_token, output_messages)
+        # 建立回覆內容
+        summary = (f"✨ 【發布成功】 ✨\n👤 身分：{'🚗 司機' if ut=='driver' else '🙋 乘客'}\n🕙 時間：{tt[5:16]}\n📍 起點：{sc}{sd}\n🏁 終點：{ec}{ed}\n🛣️ 備註：{wy} | {pc}人 | {fe}")
+        output_msgs = [TextSendMessage(text=summary)]
+
+        if match_results:
+            match_text = "🎯 【偵測到匹配對象！】\n"
+            for m in match_results:
+                t_uid, t_time, t_sc, t_sd, t_ec, t_ed, t_fee, t_flex = m
+                role = "司機" if ut == "seeker" else "乘客"
+                match_text += f"━━━━━━━━━━━━━━━\n👤 {role} | 🕙 {t_time[5:16]}\n📍 {t_sc}{t_sd} ➔ {t_ec}{t_ed}\n💰 {t_fee}\n"
+                
+                # 自動主動通知對方
+                try:
+                    push_msg = f"🔔 系統通知：有人匹配您的行程！\n👤 來自：{user_name}\n📍 路線：{sc}{sd} ➔ {ec}{ed}\n🕙 時間：{tt[5:16]}\n💬 快去社團或查看私訊聯絡吧！"
+                    line_bot_api.push_message(t_uid, TextSendMessage(text=push_msg))
+                except: pass # 忽略封鎖用戶
+
+            match_text += "\n💡 請根據上述地點於社團聯繫！"
+            output_msgs.append(TextSendMessage(text=match_text))
+        else:
+            output_msgs.append(TextSendMessage(text="🔎 目前暫無精準匹配，系統將持續為您追蹤。"))
+
+        line_bot_api.reply_message(event.reply_token, output_msgs)
         conn.close()
 
 if __name__ == "__main__":
