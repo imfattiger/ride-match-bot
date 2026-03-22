@@ -8,7 +8,7 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, 
-    QuickReply, QuickReplyButton, MessageAction, 
+    QuickReply, QuickReplyButton, MessageAction,FlexSendMessage,
     DatetimePickerAction, PostbackEvent,PostbackAction,
     TemplateSendMessage, CarouselTemplate, CarouselColumn
 )
@@ -77,7 +77,45 @@ def clean_expired_matches():
     except: pass
 
 init_db()
-
+def get_publish_confirm_flex(res_data, match_id):
+    ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res_data
+    main_color = "#00b900" if ut == 'driver' else "#1e90ff" # 司機綠/乘客藍
+    
+    bubble = {
+      "type": "bubble",
+      "header": {
+        "type": "box", "layout": "vertical", "contents": [
+          {"type": "text", "text": "✨ 行程發布成功", "weight": "bold", "color": "#FFFFFF", "size": "sm"}
+        ], "backgroundColor": main_color
+      },
+      "body": {
+        "type": "box", "layout": "vertical", "contents": [
+          {"type": "text", "text": f"{'🚗 載客模式' if ut=='driver' else '🙋 搭車模式'}", "weight": "bold", "size": "xl", "margin": "md"},
+          {"type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+              {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+              {"type": "text", "text": tt.replace("T", " "), "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+            ]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+              {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+              {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+            ]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+              {"type": "text", "text": "詳情", "color": "#aaaaaa", "size": "sm", "flex": 1},
+              {"type": "text", "text": f"{pc}人 | {fe} | {wy}", "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+            ]}
+          ]}
+        ]
+      },
+      "footer": {
+        "type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+          {"type": "button", "style": "link", "height": "sm", "action": {
+            "type": "postback", "label": "❌ 撤回/刪除此行程", "data": f"action=delete&id={match_id}"
+          }, "color": "#ff4b4b"}
+        ]
+      }
+    }
+    return FlexSendMessage(alt_text="行程發布成功", contents=bubble)
 # --- 4. 輔助工具介面 ---
 def get_main_cat_menu(text_prefix=""):
     items = [
@@ -109,6 +147,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
+    # 1. 時間彈性計算
     try:
         base_t = datetime.strptime(t_info, "%Y-%m-%dT%H:%M")
         buffer = 4 if "願意" in flex else 1
@@ -117,22 +156,36 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point):
     except:
         s_range, e_range = t_info, t_info
 
+    # 2. 【核心升級】方向性判斷
     s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
-    direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
+    user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0) # 1:南下, -1:北上, 0:同縣市
     
     query = "SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee FROM matches WHERE user_type = ? AND user_id != ? AND time_info BETWEEN ? AND ?"
     params = [target_type, user_id, s_range, e_range]
     
+    # 3. 路線比對邏輯
     if utype == 'driver' and "接受" in way_point:
         query += " AND (s_city = ? OR e_city = ?)"
         params.extend([sc, ec])
     else:
         query += " AND s_city = ? AND e_city = ?"
         params.extend([sc, ec])
+
+    c.execute(query + " ORDER BY created_at DESC", params)
+    raw_res = c.fetchall()
     
-    c.execute(query + " ORDER BY created_at DESC LIMIT 5", params)
-    res = c.fetchall(); conn.close()
-    return res
+    # 4. 【核心升級】過濾掉「反方向」的行程
+    final_matches = []
+    for m in raw_res:
+        m_s_w, m_e_w = CITY_WEIGHTS.get(m[2], 0), CITY_WEIGHTS.get(m[4], 0)
+        match_direction = 1 if m_e_w > m_s_w else (-1 if m_e_w < m_s_w else 0)
+        
+        # 只有方向相同 (或者都是同縣市) 才加入匹配清單
+        if user_direction == match_direction:
+            final_matches.append(m)
+            
+    conn.close()
+    return final_matches[:5] # 回傳前 5 筆
 # --- 6. 事件流程處理 ---
 
 @app.route("/callback", methods=['POST'])
@@ -367,27 +420,41 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, get_main_cat_menu(f"✅ 已選：{p}\n目前標籤：{p_str}"))
 
     elif msg == "最終確認發布":
-        conn = sqlite3.connect(DB_NAME); res = conn.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (uid,)).fetchone()
-        if not res: return
+        conn = sqlite3.connect(DB_NAME)
+        res = conn.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (uid,)).fetchone()
+        
+        if not res: 
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
+            return
+            
+        # 1. 存入正式表並取得自動生成的 ID
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (uid, *res))
+        new_id = cursor.lastrowid # 取得新行程的 ID
+        conn.commit()
+        conn.close()
+        
+        # 2. 執行強化後的匹配邏輯 (方向性比對)
         ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
-        conn.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (uid, *res))
-        conn.commit(); conn.close()
-        
         m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy)
-        try: name = line_bot_api.get_profile(uid).display_name
-        except: name = "神秘用戶"
         
-        summary = f"✨ 發布成功 ✨\n👤 身分：{'🚗 司機' if ut=='driver' else '🙋 乘客'}\n🕙 時間：{tt}\n📍 {sc}{sd} ➔ {ec}{ed}\n🛣️ {wy} | {pc}人 | {fe}\n🏷️ {ps}"
-        output = [TextSendMessage(text=summary)]
+        # 3. 準備回覆內容
+        # 第一個回覆：專業的 Flex 卡片
+        output = [get_publish_confirm_flex(res, new_id)]
         
+        # 第二個回覆：匹配結果
         if m_list:
-            txt = "🎯 系統偵測到匹配！\n"
+            match_text = "🎯 偵測到同向匹配！\n"
             for m in m_list:
-                txt += f"━━━━━━━━━━━━━━━\n🕙 {m[1][5:16]}\n📍 {m[2]}{m[3]} ➔ {m[4]}{m[5]}\n💰 {m[6]}\n"
-                try: line_bot_api.push_message(m[0], TextSendMessage(text=f"🔔 匹配通知！\n來自 {name} ({'司機' if ut=='driver' else '乘客'}) 的行程與您順路！\n路線：{sc}{sd} ➔ {ec}{ed}"))
+                match_text += f"━━━━━━━━━━━━━━━\n🕙 {m[1][5:16]}\n📍 {m[2]}{m[3]} ➔ {m[4]}{m[5]}\n💰 {m[6]}\n"
+                # 通知對方 (這裡也可以考慮換成卡片，我們先用簡潔文字)
+                try:
+                    line_bot_api.push_message(m[0], TextSendMessage(text=f"🔔 順路通知！\n有人發布了與您方向相同的行程：\n{sc}{sd} ➔ {ec}{ed}\n趕快點擊「我的行程」查看詳情！"))
                 except: pass
-            output.append(TextSendMessage(text=txt))
-        else: output.append(TextSendMessage(text="🔎 暫無精準匹配，系統監控中..."))
+            output.append(TextSendMessage(text=match_text))
+        else:
+            output.append(TextSendMessage(text="🔎 目前暫無同向行程，系統將持續監控。"))
+            
         line_bot_api.reply_message(event.reply_token, output)
 
 if __name__ == "__main__":
