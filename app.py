@@ -1,6 +1,9 @@
 import os
 import sqlite3
 import logging
+import threading
+import requests
+import time
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl
 from flask import Flask, request, abort
@@ -216,7 +219,17 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
             
     conn.close()
     return final_matches[:5]
-    
+
+    @app.route("/", methods=['GET'])
+    def index():
+        return "Bot is running!"
+    @app.route("/callback", methods=['POST'])
+    def callback():
+        signature = request.headers.get('X-Line-Signature')
+        body = request.get_data(as_text=True)
+        try: handler.handle(body, signature)
+        except InvalidSignatureError: abort(400)
+        return 'OK'
     # 4. 【核心升級】過濾掉「反方向」的行程
     final_matches = []
     for m in raw_res:
@@ -499,22 +512,25 @@ def handle_message(event):
             output.append(TextSendMessage(text="🔎 目前暫無同向行程，系統將持續監控。"))
             
         line_bot_api.reply_message(event.reply_token, output)
-import threading
-import requests
-import time
+
 
 def keep_alive():
+    
+    # 這裡建議 Ping 首頁路徑 "/" 即可，不要 Ping "/callback" 以免產生錯誤日誌
+    url = "https://ride-match-bot.onrender.com/" 
     while True:
         try:
-            # 替換成你自己的 App 網址
-            requests.get("
-https://ride-match-bot.onrender.com/callback/")
-            logging.info("Keep alive ping sent.")
-        except:
-            pass
-        time.sleep(600) # 每 10 分鐘跑一次
+            requests.get(url)
+            logging.info(f"Keep alive ping sent to {url}")
+        except Exception as e:
+            logging.error(f"Keep alive failed: {e}")
+        time.sleep(600) # 每 10 分鐘執行一次
 
-# 在啟動時開啟執行緒
-threading.Thread(target=keep_alive, daemon=True).start()
+# --- 8. 啟動進入點 ---
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    # 在 Flask 啟動前，先開啟後台執行緒
+    threading.Thread(target=keep_alive, daemon=True).start()
+    
+    # 啟動 Flask App
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
