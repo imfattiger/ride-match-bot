@@ -179,7 +179,12 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
         # A. 方向檢查：必須同向
         if user_direction != match_direction:
             continue
-            
+        # --- 新增：同縣市檢查 (避免同縣市亂配) ---
+        if user_direction == 0: # 代表起訖縣市相同
+            # 如果是同縣市，則起點行政區跟終點行政區必須「完全一致」才配對
+            # (或是你可以根據需求，設定同縣市不互配)
+            if not (sc == m_sc and sd == m_sd and ec == m_ec and ed == m_ed):
+                continue   
         # B. 人數檢查：如果是司機發布，找人少的乘客；如果是乘客發布，找人多的司機
         if utype == 'driver' and user_p < match_p: continue # 司機位子不夠
         if utype == 'seeker' and user_p > match_p: continue # 司機位子不夠
@@ -494,6 +499,22 @@ def handle_message(event):
             output.append(TextSendMessage(text="🔎 目前暫無同向行程，系統將持續監控。"))
             
         line_bot_api.reply_message(event.reply_token, output)
+import threading
+import requests
+import time
 
+def keep_alive():
+    while True:
+        try:
+            # 替換成你自己的 App 網址
+            requests.get("
+https://ride-match-bot.onrender.com/callback/")
+            logging.info("Keep alive ping sent.")
+        except:
+            pass
+        time.sleep(600) # 每 10 分鐘跑一次
+
+# 在啟動時開啟執行緒
+threading.Thread(target=keep_alive, daemon=True).start()
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
