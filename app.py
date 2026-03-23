@@ -145,6 +145,7 @@ def get_area_carousel(title="請選擇區域"):
     ]))
 
 # --- 5. 核心匹配演算法 (結合權重與彈性時間) ---
+# --- 修正後的 find_matches_v15 ---
 def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_count):
     target_type = 'seeker' if utype == 'driver' else 'driver'
     conn = sqlite3.connect(DB_NAME)
@@ -163,86 +164,54 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
     user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
     
-    # 3. 基礎查詢 (類型、時間、非本人)
+    # 3. 基礎查詢
     query = "SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count FROM matches WHERE user_type = ? AND user_id != ? AND time_info BETWEEN ? AND ?"
-    params = [target_type, user_id, s_range, e_range]
-    
-    c.execute(query, params)
+    c.execute(query, [target_type, user_id, s_range, e_range])
     raw_res = c.fetchall()
     
     final_matches = []
-    user_p = int(p_count) # 當前發布者的人數需求/供給
+    user_p = int(p_count)
 
     for m in raw_res:
         m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc = m
         m_s_w, m_e_w = CITY_WEIGHTS.get(m_sc, 0), CITY_WEIGHTS.get(m_ec, 0)
         match_direction = 1 if m_e_w > m_s_w else (-1 if m_e_w < m_s_w else 0)
+        
+        # 方向檢查
+        if user_direction != match_direction: continue
+        
+        # 同縣市嚴格匹配
+        if user_direction == 0 and not (sc == m_sc and sd == m_sd and ec == m_ec and ed == m_ed):
+            continue   
+
+        # 人數檢查
         match_p = int(m_pc)
+        if utype == 'driver' and user_p < match_p: continue
+        if utype == 'seeker' and user_p > match_p: continue
 
-        # A. 方向檢查：必須同向
-        if user_direction != match_direction:
-            continue
-        # --- 新增：同縣市檢查 (避免同縣市亂配) ---
-        if user_direction == 0: # 代表起訖縣市相同
-            # 如果是同縣市，則起點行政區跟終點行政區必須「完全一致」才配對
-            # (或是你可以根據需求，設定同縣市不互配)
-            if not (sc == m_sc and sd == m_sd and ec == m_ec and ed == m_ed):
-                continue   
-        # B. 人數檢查：如果是司機發布，找人少的乘客；如果是乘客發布，找人多的司機
-        if utype == 'driver' and user_p < match_p: continue # 司機位子不夠
-        if utype == 'seeker' and user_p > match_p: continue # 司機位子不夠
-
-        # C. 站點檢查 (包含中途邏輯)
-        # 司機 = D, 乘客 = S
+        # 站點檢查 (中途邏輯)
         is_match = False
-        if utype == 'driver':
-            d_s_w, d_e_w = s_w, e_w
-            s_s_w, s_e_w = m_s_w, m_e_w
-            d_way = way_point
-        else:
-            d_s_w, d_e_w = m_s_w, m_e_w
-            s_s_w, s_e_w = s_w, e_w
-            d_way = m_way
+        d_s_w, d_e_w = (s_w, e_w) if utype == 'driver' else (m_s_w, m_e_w)
+        s_s_w, s_e_w = (m_s_w, m_e_w) if utype == 'driver' else (s_w, e_w)
+        d_way = way_point if utype == 'driver' else m_way
 
-        # 如果司機接受中途：乘客的起迄權重必須在司機權重範圍內
         if "接受" in d_way:
-            if user_direction == 1: # 南下 (權重增加)
+            if user_direction == 1: # 南下
                 if d_s_w <= s_s_w and s_e_w <= d_e_w: is_match = True
-            else: # 北上 (權重減少)
+            else: # 北上
                 if d_s_w >= s_s_w and s_e_w >= d_e_w: is_match = True
         else:
-            # 不接受中途：起訖縣市必須完全一樣
             if sc == m_sc and ec == m_ec: is_match = True
         
-        if is_match:
-            final_matches.append(m)
+        if is_match: final_matches.append(m)
             
     conn.close()
     return final_matches[:5]
 
-    @app.route("/", methods=['GET'])
-    def index():
-        return "Bot is running!"
-    @app.route("/callback", methods=['POST'])
-    def callback():
-        signature = request.headers.get('X-Line-Signature')
-        body = request.get_data(as_text=True)
-        try: handler.handle(body, signature)
-        except InvalidSignatureError: abort(400)
-        return 'OK'
-    # 4. 【核心升級】過濾掉「反方向」的行程
-    final_matches = []
-    for m in raw_res:
-        m_s_w, m_e_w = CITY_WEIGHTS.get(m[2], 0), CITY_WEIGHTS.get(m[4], 0)
-        match_direction = 1 if m_e_w > m_s_w else (-1 if m_e_w < m_s_w else 0)
-        
-        # 只有方向相同 (或者都是同縣市) 才加入匹配清單
-        if user_direction == match_direction:
-            final_matches.append(m)
-            
-    conn.close()
-    return final_matches[:5] # 回傳前 5 筆
-# --- 6. 事件流程處理 ---
+# --- 正確的 Flask 路由位置 ---
+@app.route("/", methods=['GET'])
+def index():
+    return "Bot is running!"
 
 @app.route("/callback", methods=['POST'])
 def callback():
