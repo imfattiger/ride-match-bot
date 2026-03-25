@@ -529,14 +529,52 @@ def handle_message(event):
         
         # 第二個回覆：匹配結果
         if m_list:
-            match_text = "🎯 偵測到同向匹配！\n"
+            match_bubbles = []
             for m in m_list:
-                match_text += f"━━━━━━━━━━━━━━━\n🕙 {m[1][5:16]}\n📍 {m[2]}{m[3]} ➔ {m[4]}{m[5]}\n💰 {m[6]}\n"
-                # 通知對方 (這裡也可以考慮換成卡片，我們先用簡潔文字)
+                match_bubbles.append({
+                    "type": "bubble",
+                    "header": {
+                        "type": "box", "layout": "vertical",
+                        "contents": [{"type": "text", "text": "🎯 順路配對", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+                        "backgroundColor": "#1D9E75"
+                    },
+                    "body": {
+                        "type": "box", "layout": "vertical", "spacing": "sm",
+                        "contents": [
+                            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                                {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                                {"type": "text", "text": m[1][5:16], "color": "#333333", "size": "sm", "flex": 4}
+                            ]},
+                            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                                {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                                {"type": "text", "text": f"{m[2]}{m[3]} ➔ {m[4]}{m[5]}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}
+                            ]},
+                            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                                {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                                {"type": "text", "text": m[6], "color": "#333333", "size": "sm", "flex": 4}
+                            ]},
+                            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                                {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                                {"type": "text", "text": f"{m[8]}人", "color": "#333333", "size": "sm", "flex": 4}
+                            ]}
+                        ]
+                    },
+                    "footer": {
+                        "type": "box", "layout": "vertical",
+                        "contents": [{"type": "button", "style": "primary", "height": "sm",
+                            "color": "#1D9E75",
+                            "action": {"type": "uri", "label": "💬 開啟 LINE 聯絡", "uri": f"https://line.me/ti/p/{m[0]}"}}]
+                    }
+                })
                 try:
                     line_bot_api.push_message(m[0], TextSendMessage(text=f"🔔 順路通知！\n有人發布了與您方向相同的行程：\n{sc}{sd} ➔ {ec}{ed}\n趕快點擊「我的行程」查看詳情！"))
                 except: pass
-            output.append(TextSendMessage(text=match_text))
+
+            output.append(FlexSendMessage(
+                alt_text="偵測到順路配對！",
+                contents={"type": "carousel", "contents": match_bubbles}
+            ))
+
         else:
             output.append(TextSendMessage(text="🔎 目前暫無同向行程，系統將持續監控。"))
             
