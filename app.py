@@ -314,13 +314,16 @@ def handle_message(event):
             for m in my_matches:
                 m_id, t_info, sc, sd, ec, ed, utype = m
                 role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
+                title_str = f"{role} | {t_info[5:16]}"
+                text_str = f"{sc}{sd} ➔ {ec}{ed}"
                 cols.append(CarouselColumn(
-                    title=f"{role} | {t_info[5:16]}",
-                    text=f"📍 {sc}{sd} ➔ {ec}{ed}",
+                    title=title_str[:40],
+                    text=text_str[:60],
                     actions=[
                         PostbackAction(label='❌ 刪除此行程', data=f"action=delete&id={m_id}")
                     ]
                 ))
+
             line_bot_api.reply_message(event.reply_token, [
                 TextSendMessage(text="📋 以下是您的近期行程："),
                 TemplateSendMessage(alt_text="行程管理", template=CarouselTemplate(columns=cols))
