@@ -106,6 +106,12 @@ def get_publish_confirm_flex(res_data, match_id):
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
               {"type": "text", "text": "詳情", "color": "#aaaaaa", "size": "sm", "flex": 1},
               {"type": "text", "text": f"{pc}人 | {fe} | {wy}", "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+            ]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+              {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
+              {"type": "text", "text": ps if ps else "（未選）", "wrap": True, "color": "#aaaaaa", "size": "xs", "flex": 5}
+            ]},
+            {"type": "text", "text": "⚠️ 標籤僅供對方參考，不影響媒合結果", "size": "xxs", "color": "#bbbbbb", "margin": "sm", "wrap": True}
             ]}
           ]}
         ]
