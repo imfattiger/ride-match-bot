@@ -345,9 +345,14 @@ def handle_message(event):
         clean_expired_matches()
         ut = 'driver' if "載客" in msg else 'seeker'
         conn = sqlite3.connect(DB_NAME)
-        conn.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_prefs) VALUES (?, ?, ?)', (uid, ut, ""))
+        conn.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, step) VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "", "START")', (uid, ut))
         conn.commit(); conn.close()
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🕒 請選擇日期時間：", quick_reply=QuickReply(items=[QuickReplyButton(action=DatetimePickerAction(label="🕒 點我選擇", data="select_time", mode="datetime"))])))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(
+            text="🕒 請選擇日期時間：",
+            quick_reply=QuickReply(items=[
+                QuickReplyButton(action=DatetimePickerAction(label="🕒 點我選擇", data="select_time", mode="datetime"))
+            ])
+        ))
 
     elif msg.startswith("區域:"):
         area = msg.split(":")[1]
@@ -357,7 +362,8 @@ def handle_message(event):
 
     elif msg.startswith("縣市:"):
         c = msg.split(":")[1]
-        conn = sqlite3.connect(DB_NAME); res = conn.execute('SELECT step FROM user_state WHERE user_id = ?', (uid,)).fetchone()
+        conn = sqlite3.connect(DB_NAME)
+        res = conn.execute('SELECT step FROM user_state WHERE user_id = ?', (uid,)).fetchone()
         step = res[0] if res else "START"
         col = "s_city" if step == "START" else "e_city"
         conn.execute(f'UPDATE user_state SET {col} = ? WHERE user_id = ?', (c, uid))
@@ -368,14 +374,15 @@ def handle_message(event):
 
     elif msg.startswith("區:"):
         d = msg.split(":")[1]
-        conn = sqlite3.connect(DB_NAME); res = conn.execute('SELECT step FROM user_state WHERE user_id = ?', (uid,)).fetchone()
+        conn = sqlite3.connect(DB_NAME)
+        res = conn.execute('SELECT step FROM user_state WHERE user_id = ?', (uid,)).fetchone()
         step = res[0] if res else "START"
         if step == "START":
             conn.execute('UPDATE user_state SET s_dist = ?, step = "END" WHERE user_id = ?', (d, uid))
             conn.commit(); conn.close()
             line_bot_api.reply_message(event.reply_token, get_area_carousel("🏁 第二步：選擇【目的地】區域"))
         else:
-            conn.execute('UPDATE user_state SET e_dist = ? WHERE user_id = ?', (d, uid))
+            conn.execute('UPDATE user_state SET e_dist = ?, step = "DONE" WHERE user_id = ?', (d, uid))
             conn.commit(); conn.close()
             btns = [
                 QuickReplyButton(action=MessageAction(label="✅ 接受中途", text="中途:接受")),
@@ -385,7 +392,9 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="是否接受中途上下車？", quick_reply=QuickReply(items=btns)))
 
     elif msg.startswith("中途:"):
-        conn = sqlite3.connect(DB_NAME); conn.execute('UPDATE user_state SET temp_way = ? WHERE user_id = ?', (msg.split(":")[1], uid)); conn.commit(); conn.close()
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute('UPDATE user_state SET temp_way = ? WHERE user_id = ?', (msg.split(":")[1], uid))
+        conn.commit(); conn.close()
         line_bot_api.reply_message(event.reply_token, get_detail_flex())
 
     elif msg.startswith("人數:"):
@@ -500,7 +509,8 @@ def handle_message(event):
 
     elif msg.startswith("規範:"):
         p = msg.split(":")[1]
-        conn = sqlite3.connect(DB_NAME); res = conn.execute('SELECT temp_prefs FROM user_state WHERE user_id = ?', (uid,)).fetchone()
+        conn = sqlite3.connect(DB_NAME)
+        res = conn.execute('SELECT temp_prefs FROM user_state WHERE user_id = ?', (uid,)).fetchone()
         p_str = (res[0] if res and res[0] else "") + f"{p}, "
         conn.execute('UPDATE user_state SET temp_prefs = ? WHERE user_id = ?', (p_str, uid))
         conn.commit(); conn.close()
@@ -509,14 +519,13 @@ def handle_message(event):
     elif msg == "最終確認發布":
         conn = sqlite3.connect(DB_NAME)
         res = conn.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (uid,)).fetchone()
-        
+
         if not res:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
 
         ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
 
-        # 防呆：必填欄位檢查
         missing = []
         if not tt: missing.append("出發時間")
         if not sc or not sd: missing.append("出發地")
@@ -531,22 +540,16 @@ def handle_message(event):
             ))
             return
 
-            
-        # 1. 存入正式表並取得自動生成的 ID
         cursor = conn.cursor()
         cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (uid, *res))
         new_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        
-        # 2. 執行強化後的匹配邏輯 (注意這裡傳入了最後一個參數 pc)
-        m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc) # <--- 修改這行
-        
-        # 3. 準備回覆內容
-        # 第一個回覆：專業的 Flex 卡片
+
+        m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc)
+
         output = [get_publish_confirm_flex(res, new_id)]
-        
-        # 第二個回覆：匹配結果
+
         if m_list:
             match_bubbles = []
             for m in m_list:
@@ -593,10 +596,9 @@ def handle_message(event):
                 alt_text="偵測到順路配對！",
                 contents={"type": "carousel", "contents": match_bubbles}
             ))
-
         else:
             output.append(TextSendMessage(text="🔎 目前暫無同向行程，系統將持續監控。"))
-            
+
         line_bot_api.reply_message(event.reply_token, output)
 
 
