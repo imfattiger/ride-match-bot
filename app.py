@@ -491,9 +491,27 @@ def handle_message(event):
         conn = sqlite3.connect(DB_NAME)
         res = conn.execute('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs FROM user_state WHERE user_id = ?', (uid,)).fetchone()
         
-        if not res: 
+        if not res:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
+
+        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
+
+        # 防呆：必填欄位檢查
+        missing = []
+        if not tt: missing.append("出發時間")
+        if not sc or not sd: missing.append("出發地")
+        if not ec or not ed: missing.append("目的地")
+        if not pc: missing.append("人數")
+        if not fe: missing.append("費用方式")
+        if not fx: missing.append("時間彈性")
+
+        if missing:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text=f"⚠️ 還有以下項目未填：\n" + "\n".join(f"• {m}" for m in missing) + "\n\n請返回補填後再發布。"
+            ))
+            return
+
             
         # 1. 存入正式表並取得自動生成的 ID
         cursor = conn.cursor()
@@ -503,7 +521,6 @@ def handle_message(event):
         conn.close()
         
         # 2. 執行強化後的匹配邏輯 (注意這裡傳入了最後一個參數 pc)
-        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res
         m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc) # <--- 修改這行
         
         # 3. 準備回覆內容
