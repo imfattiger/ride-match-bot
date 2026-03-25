@@ -143,6 +143,52 @@ def get_area_carousel(title="請選擇區域"):
             MessageAction(label='略過直接發布', text='最終確認發布')
         ])
     ]))
+def get_detail_flex():
+    bubble = {
+        "type": "bubble",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "contents": [{"type": "text", "text": "行程細節（一次設定）",
+                          "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+            "backgroundColor": "#444441"
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "人數", "size": "sm", "color": "#888780"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "1人", "text": "人數:1"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "2人", "text": "人數:2"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "3人", "text": "人數:3"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "4人", "text": "人數:4"}}
+                ]},
+                {"type": "separator"},
+                {"type": "text", "text": "費用方式", "size": "sm", "color": "#888780"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "議價", "text": "費用:私訊議價"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "飲料", "text": "費用:請喝飲料"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "公益", "text": "費用:免費公益"}}
+                ]},
+                {"type": "separator"},
+                {"type": "text", "text": "時間彈性", "size": "sm", "color": "#888780"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
+                     "color": "#1D9E75",
+                     "action": {"type": "message", "label": "彈性 ±4hr", "text": "彈性:願意彈性"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "精確時間", "text": "彈性:不願意"}}
+                ]}
+            ]
+        }
+    }
+    return FlexSendMessage(alt_text="設定行程細節", contents=bubble)
 
 # --- 5. 核心匹配演算法 (結合權重與彈性時間) ---
 # --- 修正後的 find_matches_v15 ---
@@ -337,27 +383,24 @@ def handle_message(event):
 
     elif msg.startswith("中途:"):
         conn = sqlite3.connect(DB_NAME); conn.execute('UPDATE user_state SET temp_way = ? WHERE user_id = ?', (msg.split(":")[1], uid)); conn.commit(); conn.close()
-        btns = [QuickReplyButton(action=MessageAction(label=f"{i}人", text=f"人數:{i}")) for i in range(1, 5)]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請選擇人數：", quick_reply=QuickReply(items=btns)))
+        line_bot_api.reply_message(event.reply_token, get_detail_flex())
 
     elif msg.startswith("人數:"):
-        conn = sqlite3.connect(DB_NAME); conn.execute('UPDATE user_state SET temp_count = ? WHERE user_id = ?', (msg.split(":")[1], uid)); conn.commit(); conn.close()
-        btns = [
-            QuickReplyButton(action=MessageAction(label="💰 私訊議價", text="費用:私訊議價")),
-            QuickReplyButton(action=MessageAction(label="☕ 咖啡飲料", text="費用:請喝飲料")),
-            QuickReplyButton(action=MessageAction(label="💵 固定金額", text="費用:固定金額")),
-            QuickReplyButton(action=MessageAction(label="🆓 免費公益", text="費用:免費公益"))
-        ]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="分攤方式：", quick_reply=QuickReply(items=btns)))
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute('UPDATE user_state SET temp_count = ? WHERE user_id = ?', (msg.split(":")[1], uid))
+        conn.commit(); conn.close()
 
     elif msg.startswith("費用:"):
-        conn = sqlite3.connect(DB_NAME); conn.execute('UPDATE user_state SET temp_fee = ? WHERE user_id = ?', (msg.split(":")[1], uid)); conn.commit(); conn.close()
-        btns = [QuickReplyButton(action=MessageAction(label="願意彈性", text="彈性:願意彈性")), QuickReplyButton(action=MessageAction(label="不願意", text="彈性:不願意"))]
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="是否願意彈性比對時間(±4hr)？", quick_reply=QuickReply(items=btns)))
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute('UPDATE user_state SET temp_fee = ? WHERE user_id = ?', (msg.split(":")[1], uid))
+        conn.commit(); conn.close()
 
     elif msg.startswith("彈性:"):
-        conn = sqlite3.connect(DB_NAME); conn.execute('UPDATE user_state SET temp_flex = ? WHERE user_id = ?', (msg.split(":")[1], uid)); conn.commit(); conn.close()
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute('UPDATE user_state SET temp_flex = ? WHERE user_id = ?', (msg.split(":")[1], uid))
+        conn.commit(); conn.close()
         line_bot_api.reply_message(event.reply_token, get_main_cat_menu("最後一步：自定義規範。"))
+
 
     elif msg.startswith("類別:"):
         cat = msg.split(":")[1]
