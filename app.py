@@ -82,8 +82,9 @@ def clean_expired_matches():
 init_db()
 def get_publish_confirm_flex(res_data, match_id):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps = res_data
-    main_color = "#00b900" if ut == 'driver' else "#1e90ff" # 司機綠/乘客藍
-    
+    main_color = "#00b900" if ut == 'driver' else "#1e90ff"
+    ps_text = ps.strip().rstrip(",") if ps else "（未選）"
+
     bubble = {
       "type": "bubble",
       "header": {
@@ -109,10 +110,9 @@ def get_publish_confirm_flex(res_data, match_id):
             ]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
               {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
-              {"type": "text", "text": ps if ps else "（未選）", "wrap": True, "color": "#aaaaaa", "size": "xs", "flex": 5}
+              {"type": "text", "text": ps_text, "wrap": True, "color": "#aaaaaa", "size": "xs", "flex": 5}
             ]},
-            {"type": "text", "text": "⚠️ 標籤僅供對方參考，不影響媒合結果", "size": "xxs", "color": "#bbbbbb", "margin": "sm", "wrap": True}
-            ]}
+            {"type": "text", "text": "＊標籤僅供對方參考，不影響媒合", "size": "xxs", "color": "#cccccc", "margin": "sm", "wrap": True}
           ]}
         ]
       },
