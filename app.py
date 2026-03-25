@@ -122,10 +122,11 @@ def get_publish_confirm_flex(res_data, match_id):
 # --- 4. 輔助工具介面 ---
 def get_main_cat_menu(text_prefix=""):
     items = [
-        QuickReplyButton(action=MessageAction(label="🚗 行程/地點", text="類別:行程")),
-        QuickReplyButton(action=MessageAction(label="💰 費用相關", text="類別:費用")),
-        QuickReplyButton(action=MessageAction(label="🚬 環境規範", text="類別:環境")),
+        QuickReplyButton(action=MessageAction(label="🛣️ 路線與行程", text="類別:路線")),
+        QuickReplyButton(action=MessageAction(label="💰 費用與付款", text="類別:費用")),
+        QuickReplyButton(action=MessageAction(label="🚗 車內環境", text="類別:環境")),
         QuickReplyButton(action=MessageAction(label="💬 乘車氛圍", text="類別:氛圍")),
+        QuickReplyButton(action=MessageAction(label="📦 行李與安全", text="類別:行李安全")),
         QuickReplyButton(action=MessageAction(label="🚀 全部選好，發布！", text="最終確認發布"))
     ]
     return TextSendMessage(text=f"{text_prefix}請選擇欲加入的標籤分類：", quick_reply=QuickReply(items=items))
@@ -433,79 +434,93 @@ def handle_message(event):
     elif msg.startswith("類別:"):
         cat = msg.split(":")[1]
         cols = []
-        if cat == "行程":
+        if cat == "路線":
             cols = [
-                CarouselColumn(title='行程規範(1)', text='服務與討論', actions=[
-                    MessageAction(label='提供包裹服務', text='規範:提供包裹服務'),
-                    MessageAction(label='上下車可討論', text='規範:上下車可討論'),
-                    MessageAction(label='順路為主', text='規範:順路為主')
+                CarouselColumn(title='路線(1)', text='接送與繞路', actions=[
+                    MessageAction(label='順路為主', text='規範:順路為主'),
+                    MessageAction(label='接受繞路接送', text='規範:接受繞路接送'),
+                    MessageAction(label='可討論上下車點', text='規範:可討論上下車點')
                 ]),
-                CarouselColumn(title='行程規範(2)', text='目的與寵物', actions=[
-                    MessageAction(label='可以送至目的地', text='規範:可以送至目的地'),
-                    MessageAction(label='可停等休息站', text='規範:可停等休息站'),
-                    MessageAction(label='寵物需裝籠', text='規範:寵物需裝籠')
+                CarouselColumn(title='路線(2)', text='路線安排', actions=[
+                    MessageAction(label='高速交流道為主', text='規範:高速交流道為主'),
+                    MessageAction(label='可停休息站', text='規範:可停休息站'),
+                    MessageAction(label='依司機路線為準', text='規範:依司機路線為準')
                 ]),
-                CarouselColumn(title='行程規範(3)', text='駕駛安排', actions=[
-                    MessageAction(label='不接受指定時間', text='規範:不接受指定時間'),
-                    MessageAction(label='依照駕駛安排座', text='規範:依照駕駛安排座'),
-                    MessageAction(label='依照駕駛路線', text='規範:依照駕駛路線')
-                ]),
-                CarouselColumn(title='行程規範(4)', text='其他限制', actions=[
-                    MessageAction(label='謝絕寵物', text='規範:謝絕寵物'),
-                    MessageAction(label='大型行李告知', text='規範:大型行李告知'),
-                    MessageAction(label='務必準時', text='規範:務必準時')
+                CarouselColumn(title='路線(3)', text='通勤模式', actions=[
+                    MessageAction(label='回程願意順載', text='規範:回程願意順載'),
+                    MessageAction(label='固定通勤路線', text='規範:固定通勤路線'),
+                    MessageAction(label='長期通勤歡迎', text='規範:長期通勤歡迎')
                 ])
             ]
         elif cat == "費用":
             cols = [
-                CarouselColumn(title='費用細節', text='付款與議價', actions=[
+                CarouselColumn(title='費用(1)', text='付款方式', actions=[
                     MessageAction(label='不接受議價', text='規範:不接受議價'),
-                    MessageAction(label='接受轉帳', text='規範:接受轉帳'),
-                    MessageAction(label='自備零錢', text='規範:自備零錢')
+                    MessageAction(label='轉帳現金皆可', text='規範:轉帳現金皆可'),
+                    MessageAction(label='請自備零錢', text='規範:請自備零錢')
                 ]),
-                CarouselColumn(title='優惠減免', text='公益與身分', actions=[
+                CarouselColumn(title='費用(2)', text='付款時機', actions=[
+                    MessageAction(label='先付後乘', text='規範:先付後乘'),
+                    MessageAction(label='到達後付款', text='規範:到達後付款'),
+                    MessageAction(label='可開收據', text='規範:可開收據')
+                ]),
+                CarouselColumn(title='費用(3)', text='優惠減免', actions=[
                     MessageAction(label='學生低收減免', text='規範:學生低收減免'),
-                    MessageAction(label='捐款抵費用', text='規範:捐款抵費用'),
-                    MessageAction(label='寵物免收費', text='規範:寵物免收費')
+                    MessageAction(label='寵物不另收費', text='規範:寵物不另收費'),
+                    MessageAction(label='捐款抵費用', text='規範:捐款抵費用')
                 ])
             ]
         elif cat == "環境":
             cols = [
-                CarouselColumn(title='環境(1)', text='菸酒與整潔', actions=[
-                    MessageAction(label='全程禁菸酒', text='規範:全程禁菸酒'),
-                    MessageAction(label='無菸無檳榔', text='規範:無菸無檳榔'),
-                    MessageAction(label='車內乾淨', text='規範:車內乾淨')
+                CarouselColumn(title='環境(1)', text='菸酒飲食', actions=[
+                    MessageAction(label='全程禁菸禁檳榔', text='規範:全程禁菸禁檳榔'),
+                    MessageAction(label='禁止飲食', text='規範:禁止飲食'),
+                    MessageAction(label='可飲水', text='規範:可飲水')
                 ]),
-                CarouselColumn(title='環境(2)', text='飲食與防疫', actions=[
-                    MessageAction(label='口罩可飲水', text='規範:口罩可飲水'),
-                    MessageAction(label='禁食', text='規範:禁食'),
-                    MessageAction(label='消毒自備', text='規範:消毒自備')
+                CarouselColumn(title='環境(2)', text='整潔與設備', actions=[
+                    MessageAction(label='請保持車內整潔', text='規範:請保持車內整潔'),
+                    MessageAction(label='有行車記錄器', text='規範:有行車記錄器'),
+                    MessageAction(label='車內有兒童座椅', text='規範:車內有兒童座椅')
                 ]),
-                CarouselColumn(title='環境(3)', text='行李寵物', actions=[
-                    MessageAction(label='有大型行李箱', text='規範:大型行李箱'),
-                    MessageAction(label='寵物推車提籠', text='規範:寵物推車提籠'),
-                    MessageAction(label='寵物酌收費', text='規範:寵物酌收費')
-                ]),
-                CarouselColumn(title='安全', text='行車風格', actions=[
-                    MessageAction(label='拒絕超速', text='規範:拒絕超速'),
-                    MessageAction(label='無快車駕駛', text='規範:無快車駕駛'),
-                    MessageAction(label='投保乘客險', text='規範:投保乘客險')
+                CarouselColumn(title='環境(3)', text='寵物規定', actions=[
+                    MessageAction(label='寵物需裝籠推車', text='規範:寵物需裝籠推車'),
+                    MessageAction(label='謝絕寵物', text='規範:謝絕寵物'),
+                    MessageAction(label='座位依司機安排', text='規範:座位依司機安排')
                 ])
             ]
         elif cat == "氛圍":
             cols = [
-                CarouselColumn(title='氛圍', text='社交互動', actions=[
-                    MessageAction(label='可聊天', text='規範:可聊天'),
-                    MessageAction(label='不聊天', text='規範:不聊天'),
+                CarouselColumn(title='氛圍(1)', text='互動偏好', actions=[
+                    MessageAction(label='歡迎聊天', text='規範:歡迎聊天'),
+                    MessageAction(label='安靜為主', text='規範:安靜為主'),
                     MessageAction(label='可睡覺聽歌', text='規範:可睡覺聽歌')
                 ]),
-                CarouselColumn(title='特殊', text='需求與長期', actions=[
-                    MessageAction(label='長期通勤', text='規範:長期通勤'),
-                    MessageAction(label='後座限2人', text='規範:後座限2人'),
-                    MessageAction(label='無不良坐姿', text='規範:無不良坐姿')
+                CarouselColumn(title='氛圍(2)', text='同行偏好', actions=[
+                    MessageAction(label='歡迎攜伴同行', text='規範:歡迎攜伴同行'),
+                    MessageAction(label='可帶外食上車', text='規範:可帶外食上車'),
+                    MessageAction(label='限同性乘客', text='規範:限同性乘客')
                 ])
             ]
-        line_bot_api.reply_message(event.reply_token, TemplateSendMessage(alt_text='選擇規範', template=CarouselTemplate(columns=cols)))
+        elif cat == "行李安全":
+            cols = [
+                CarouselColumn(title='行李(1)', text='行李規定', actions=[
+                    MessageAction(label='大型行李請告知', text='規範:大型行李請告知'),
+                    MessageAction(label='行李限一件', text='規範:行李限一件'),
+                    MessageAction(label='不接受超重行李', text='規範:不接受超重行李')
+                ]),
+                CarouselColumn(title='行李(2)', text='包裹寄送', actions=[
+                    MessageAction(label='可寄送小型包裹', text='規範:可寄送小型包裹'),
+                    MessageAction(label='務必準時', text='規範:務必準時'),
+                    MessageAction(label='需身分驗證乘車', text='規範:需身分驗證乘車')
+                ]),
+                CarouselColumn(title='安全', text='駕駛與保險', actions=[
+                    MessageAction(label='穩健駕駛風格', text='規範:穩健駕駛風格'),
+                    MessageAction(label='投保乘客責任險', text='規範:投保乘客責任險'),
+                    MessageAction(label='全程開啟定位', text='規範:全程開啟定位')
+                ])
+            ]
+        if cols:
+            line_bot_api.reply_message(event.reply_token, TemplateSendMessage(alt_text='選擇規範', template=CarouselTemplate(columns=cols)))
 
     elif msg.startswith("規範:"):
         p = msg.split(":")[1]
