@@ -397,10 +397,26 @@ def handle_message(event):
 
     elif msg.startswith("彈性:"):
         conn = sqlite3.connect(DB_NAME)
+        res = conn.execute('SELECT temp_count, temp_fee, temp_way FROM user_state WHERE user_id = ?', (uid,)).fetchone()
         conn.execute('UPDATE user_state SET temp_flex = ? WHERE user_id = ?', (msg.split(":")[1], uid))
         conn.commit(); conn.close()
-        line_bot_api.reply_message(event.reply_token, get_main_cat_menu("最後一步：自定義規範。"))
 
+        pc = res[0] if res else None
+        fe = res[1] if res else None
+        wy = res[2] if res else ""
+
+        if not pc or not fe:
+            missing = []
+            if not pc: missing.append("人數")
+            if not fe: missing.append("費用方式")
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text=f"⚠️ {'、'.join(missing)} 尚未選擇，請返回補填。",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="↩ 返回重選", text=f"中途:{wy}"))
+                ])
+            ))
+        else:
+            line_bot_api.reply_message(event.reply_token, get_main_cat_menu("最後一步：自定義規範。"))
 
     elif msg.startswith("類別:"):
         cat = msg.split(":")[1]
