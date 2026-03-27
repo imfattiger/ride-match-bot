@@ -165,7 +165,10 @@ def clean_expired_matches():
     except Exception as e:
         logging.error(f"Clean expired failed: {e}")
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    logging.error(f"init_db failed (app will retry on first request): {e}")
 
 # --- 安全包裝 LINE API（Item 6）---
 def safe_reply(reply_token, messages):
@@ -1025,11 +1028,11 @@ def handle_message(event):
 
 # --- 10. Keep Alive ---
 def keep_alive():
-    url = "https://ride-match-bot.onrender.com/"
+    url = os.getenv('RENDER_EXTERNAL_URL', 'https://ride-match-bot.onrender.com') + '/'
     while True:
         try:
-            requests.get(url)
-            logging.info(f"Keep alive ping sent to {url}")
+            requests.get(url, timeout=10)
+            logging.info(f"Keep alive ping: {url}")
         except Exception as e:
             logging.error(f"Keep alive failed: {e}")
         time.sleep(600)
