@@ -171,17 +171,28 @@ except Exception as e:
     logging.error(f"init_db failed (app will retry on first request): {e}")
 
 # --- 安全包裝 LINE API（Item 6）---
+_log_store = []
+
+def _store_log(tag, msg):
+    _log_store.append({"time": datetime.now().isoformat(), "tag": tag, "msg": str(msg)})
+    if len(_log_store) > 30:
+        _log_store.pop(0)
+
 def safe_reply(reply_token, messages):
     try:
         line_bot_api.reply_message(reply_token, messages)
+        _store_log("reply_ok", f"token={reply_token[:10]}...")
     except Exception as e:
         logging.error(f"Reply failed: {e}")
+        _store_log("reply_fail", str(e))
 
 def safe_push(user_id, messages):
     try:
         line_bot_api.push_message(user_id, messages)
+        _store_log("push_ok", f"uid={user_id[:10]}...")
     except Exception as e:
         logging.error(f"Push to {user_id} failed: {e}")
+        _store_log("push_fail", str(e))
 
 # --- 4. Flex 卡片建構 ---
 def get_publish_confirm_flex(res_data, match_id):
@@ -600,16 +611,22 @@ def debug_bot():
     except Exception as e:
         return {"status": "error", "detail": str(e)}, 500
 
+@app.route("/logs", methods=['GET'])
+def show_logs():
+    return {"logs": _log_store}
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
+    _store_log("webhook", f"body_len={len(body)}")
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
     except Exception as e:
         logging.error(f"Handler error: {e}", exc_info=True)
+        _store_log("handler_error", str(e))
     return 'OK'
 
 # --- 7. FollowEvent（歡迎訊息，Item 3）---
@@ -1014,9 +1031,13 @@ def handle_message(event):
 
     # --- 未知輸入 fallback（含 WAIT_LINE_ID 處理）---
     else:
-        conn = get_db()
-        res = conn.execute(q('SELECT step, current_type FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        conn.close()
+        try:
+            conn = get_db()
+            res = conn.execute(q('SELECT step, current_type FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+            conn.close()
+        except Exception as e:
+            _store_log("fallback_db_error", str(e))
+            res = None
 
         # 處理 LINE ID 輸入
         if res and res[0] == 'WAIT_LINE_ID':
