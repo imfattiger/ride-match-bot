@@ -1,0 +1,7 @@
+*.db
+.env
+__pycache__/
+*.pyc
+venv/
+*.txt
+!requirements.txt
