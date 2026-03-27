@@ -575,7 +575,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     return final_matches[:5]
 
 # --- 6. Flask 路由 ---
-@app.route("/", methods=['GET'])
+@app.route("/", methods=['GET', 'POST'])
 def index():
     return "Bot is running!"
 
