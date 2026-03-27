@@ -107,9 +107,44 @@ USE_PG = bool(os.getenv('DATABASE_URL'))
 if USE_PG:
     import psycopg2
 
+class _PGWrapper:
+    """讓 psycopg2 connection 支援 sqlite3 的 conn.execute() 介面"""
+    def __init__(self, conn):
+        self._conn = conn
+        self._cur = conn.cursor()
+
+    def execute(self, sql, params=None):
+        if params is not None:
+            self._cur.execute(sql, params)
+        else:
+            self._cur.execute(sql)
+        return self
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        try: self._cur.close()
+        except: pass
+        try: self._conn.close()
+        except: pass
+
+    def cursor(self):
+        return self._cur
+
+    @property
+    def lastrowid(self):
+        return self._cur.lastrowid
+
 def get_db():
     if USE_PG:
-        return psycopg2.connect(os.getenv('DATABASE_URL'))
+        return _PGWrapper(psycopg2.connect(os.getenv('DATABASE_URL')))
     return sqlite3.connect(DB_NAME)
 
 def q(sql):
