@@ -579,6 +579,19 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
 def index():
     return "Bot is running!"
 
+@app.route("/health", methods=['GET'])
+def health():
+    token_ok = bool(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
+    secret_ok = bool(os.getenv('LINE_CHANNEL_SECRET'))
+    db_ok = False
+    try:
+        conn = get_db()
+        conn.close()
+        db_ok = True
+    except Exception as e:
+        pass
+    return {"token": token_ok, "secret": secret_ok, "db": db_ok}
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature')
@@ -587,6 +600,8 @@ def callback():
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+    except Exception as e:
+        logging.error(f"Handler error: {e}", exc_info=True)
     return 'OK'
 
 # --- 7. FollowEvent（歡迎訊息，Item 3）---
