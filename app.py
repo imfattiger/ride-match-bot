@@ -104,16 +104,27 @@ def get_district_cluster(city, dist):
 DB_NAME = 'ridematch_v15.db'
 USE_PG = bool(os.getenv('DATABASE_URL'))
 
+_pg_pool = None
+
 if USE_PG:
     import psycopg2
+    from psycopg2 import pool as _pg_pool_mod
+
+def _ensure_pool():
+    global _pg_pool
+    if _pg_pool is None:
+        _pg_pool = _pg_pool_mod.ThreadedConnectionPool(1, 5, os.getenv('DATABASE_URL'))
+    return _pg_pool
 
 class _PGWrapper:
-    """讓 psycopg2 connection 支援 sqlite3 的 conn.execute() 介面"""
-    def __init__(self, conn):
+    """讓 psycopg2 connection 支援 sqlite3 的 conn.execute() 介面，並自動歸還連線池"""
+    def __init__(self, conn, pool):
         self._conn = conn
-        self._cur = conn.cursor()
+        self._cur = None
+        self._pool = pool
 
     def execute(self, sql, params=None):
+        self._cur = self._conn.cursor()
         if params is not None:
             self._cur.execute(sql, params)
         else:
@@ -121,30 +132,32 @@ class _PGWrapper:
         return self
 
     def fetchone(self):
-        return self._cur.fetchone()
+        return self._cur.fetchone() if self._cur else None
 
     def fetchall(self):
-        return self._cur.fetchall()
+        return self._cur.fetchall() if self._cur else []
 
     def commit(self):
         self._conn.commit()
 
     def close(self):
-        try: self._cur.close()
-        except: pass
-        try: self._conn.close()
+        if self._cur:
+            try: self._cur.close()
+            except: pass
+        try: self._pool.putconn(self._conn)
         except: pass
 
     def cursor(self):
-        return self._cur
+        return self._conn.cursor()
 
     @property
     def lastrowid(self):
-        return self._cur.lastrowid
+        return self._cur.lastrowid if self._cur else None
 
 def get_db():
     if USE_PG:
-        return _PGWrapper(psycopg2.connect(os.getenv('DATABASE_URL')))
+        pool = _ensure_pool()
+        return _PGWrapper(pool.getconn(), pool)
     return sqlite3.connect(DB_NAME)
 
 def q(sql):
@@ -190,7 +203,13 @@ def init_db():
     conn.commit()
     conn.close()
 
+_last_clean_ts = 0
+
 def clean_expired_matches():
+    global _last_clean_ts
+    if time.time() - _last_clean_ts < 300:  # 最多每 5 分鐘跑一次
+        return
+    _last_clean_ts = time.time()
     try:
         conn = get_db()
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
