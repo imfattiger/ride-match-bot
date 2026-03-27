@@ -592,6 +592,14 @@ def health():
         pass
     return {"token": token_ok, "secret": secret_ok, "db": db_ok}
 
+@app.route("/debug-bot", methods=['GET'])
+def debug_bot():
+    try:
+        info = line_bot_api.get_bot_info()
+        return {"status": "ok", "bot_name": info.display_name, "bot_id": info.user_id}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}, 500
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature')
