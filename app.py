@@ -14,7 +14,7 @@ from linebot.models import (
     QuickReply, QuickReplyButton, MessageAction, FlexSendMessage,
     DatetimePickerAction, PostbackEvent, PostbackAction,
     TemplateSendMessage, CarouselTemplate, CarouselColumn,
-    FollowEvent
+    FollowEvent, URIAction
 )
 
 # --- 1. 基礎設定 ---
@@ -173,7 +173,7 @@ def init_db():
             id SERIAL PRIMARY KEY, user_id TEXT, user_type TEXT, time_info TEXT,
             s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT,
             way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT,
-            line_id TEXT DEFAULT '', status TEXT DEFAULT 'active',
+            line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS user_state (
             user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT,
@@ -194,7 +194,7 @@ def init_db():
             try: c.execute(stmt)
             except: pass
     else:
-        c.execute('''CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT"]:
@@ -341,7 +341,7 @@ def get_detail_flex():
         "type": "bubble",
         "header": {
             "type": "box", "layout": "vertical",
-            "contents": [{"type": "text", "text": "行程細節（一次設定）",
+            "contents": [{"type": "text", "text": "行程細節（依序點選）",
                           "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
             "backgroundColor": "#444441"
         },
@@ -350,13 +350,12 @@ def get_detail_flex():
             "contents": [
                 {"type": "text", "text": "中途上下車", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
-                     "color": "#1D9E75",
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "✅ 接受", "text": "中途:接受"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "僅起迄", "text": "中途:僅限起迄"}},
+                     "action": {"type": "message", "label": "❌ 僅起迄", "text": "中途:僅限起迄"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "交流道", "text": "中途:限交流道"}}
+                     "action": {"type": "message", "label": "🛣️ 交流道", "text": "中途:限交流道"}}
                 ]},
                 {"type": "separator"},
                 {"type": "text", "text": "人數", "size": "sm", "color": "#888780"},
@@ -381,7 +380,7 @@ def get_detail_flex():
                      "action": {"type": "message", "label": "公益", "text": "費用:免費公益"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "時間彈性", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "時間彈性（選完自動進入下一步）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "primary", "height": "sm", "flex": 1,
                      "color": "#1D9E75",
@@ -390,20 +389,20 @@ def get_detail_flex():
                      "action": {"type": "message", "label": "精確時間", "text": "彈性:不願意"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "行程有效期", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "行程有效天數（預設3天）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "1 天", "text": "有效:1"}},
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
-                     "color": "#42659a",
-                     "action": {"type": "message", "label": "3 天", "text": "有效:3"}},
+                     "action": {"type": "message", "label": "1天", "text": "有效:1"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "7 天", "text": "有效:7"}}
+                     "action": {"type": "message", "label": "3天", "text": "有效:3"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "7天", "text": "有效:7"}}
                 ]}
             ]
         }
     }
     return FlexSendMessage(alt_text="設定行程細節", contents=bubble)
+
 
 # --- 歡迎訊息 Flex 卡片（Item 3）---
 def get_welcome_flex():
@@ -547,7 +546,7 @@ def do_publish(uid, reply_token):
     conn.close()
 
     m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc)
-    output = [get_publish_confirm_flex(res, new_id)]
+    output = [get_publish_confirm_flex(res[:12], new_id)]
 
     if m_list:
         match_bubbles = []
@@ -619,7 +618,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     user_p = int(p_count)
 
     for m in raw_res:
-        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, _m_lid = m
+        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id = m
         m_s_w, m_e_w = CITY_WEIGHTS.get(m_sc, 0), CITY_WEIGHTS.get(m_ec, 0)
         match_direction = 1 if m_e_w > m_s_w else (-1 if m_e_w < m_s_w else 0)
 
@@ -705,7 +704,7 @@ def stats():
         conn = get_db()
         today = datetime.now().strftime("%Y-%m-%d")
         total_active = conn.execute(q("SELECT COUNT(*) FROM matches WHERE status = 'active'")).fetchone()[0]
-        today_new = conn.execute(q("SELECT COUNT(*) FROM matches WHERE created_at::date = ?::date" if USE_PG else "SELECT COUNT(*) FROM matches WHERE date(created_at) = ?"), (today,)).fetchone()[0]
+        today_new = conn.execute(q("SELECT COUNT(*) FROM matches WHERE created_at::text LIKE ? "), (f"{today}%",)).fetchone()[0] if USE_PG else conn.execute("SELECT COUNT(*) FROM matches WHERE created_at LIKE ?", (f"{today}%",)).fetchone()[0]
         total_ratings = conn.execute(q("SELECT COUNT(*) FROM ratings")).fetchone()[0]
         avg_score_row = conn.execute(q("SELECT AVG(score) FROM ratings")).fetchone()
         avg_score = round(float(avg_score_row[0]), 2) if avg_score_row and avg_score_row[0] else 0
@@ -874,14 +873,7 @@ def handle_message(event):
             safe_reply(event.reply_token, get_area_carousel("📍 選擇【出發地】區域"))
         elif not ec or not ed:
             safe_reply(event.reply_token, get_area_carousel("🏁 選擇【目的地】區域"))
-        elif not wy:
-            btns = [
-                QuickReplyButton(action=MessageAction(label="✅ 接受中途", text="中途:接受")),
-                QuickReplyButton(action=MessageAction(label="❌ 僅限起迄", text="中途:僅限起迄")),
-                QuickReplyButton(action=MessageAction(label="🛣️ 交流道可", text="中途:限交流道"))
-            ]
-            safe_reply(event.reply_token, TextSendMessage(text="是否接受中途上下車？", quick_reply=QuickReply(items=btns)))
-        elif not pc or not fe or not fx:
+        elif not wy or not pc or not fe or not fx:
             safe_reply(event.reply_token, get_detail_flex())
         else:
             safe_reply(event.reply_token, get_main_cat_menu("您已填完基本資料，請選擇標籤或直接發布。"))
@@ -889,15 +881,12 @@ def handle_message(event):
 
     elif msg == "找行程":
         btns = [
-            QuickReplyButton(action=MessageAction(label="🏙️ 北部", text="找地區:北部")),
-            QuickReplyButton(action=MessageAction(label="🌄 中部", text="找地區:中部")),
-            QuickReplyButton(action=MessageAction(label="☀️ 南部", text="找地區:南部")),
-            QuickReplyButton(action=MessageAction(label="🌿 東部", text="找地區:東部")),
+            QuickReplyButton(action=MessageAction(label="北部", text="找地區:北部")),
+            QuickReplyButton(action=MessageAction(label="中部", text="找地區:中部")),
+            QuickReplyButton(action=MessageAction(label="南部", text="找地區:南部")),
+            QuickReplyButton(action=MessageAction(label="東部", text="找地區:東部")),
         ]
-        safe_reply(event.reply_token, TextSendMessage(
-            text="🔍 請選擇你要查詢的出發地區域：",
-            quick_reply=QuickReply(items=btns)
-        ))
+        safe_reply(event.reply_token, TextSendMessage(text="🔍 找行程：請選擇你的出發/目的大區域：", quick_reply=QuickReply(items=btns)))
         return
 
     elif msg.startswith("找地區:"):
@@ -905,7 +894,7 @@ def handle_message(event):
         cities = CITY_DATA.get(area, [])
         btns = [QuickReplyButton(action=MessageAction(label=c, text=f"找縣市:{c}")) for c in cities]
         safe_reply(event.reply_token, TextSendMessage(
-            text=f"請選擇 {area} 的縣市：",
+            text=f"已選 {area}，請選擇縣市：",
             quick_reply=QuickReply(items=btns)
         ))
         return
@@ -914,41 +903,38 @@ def handle_message(event):
         city = msg.split(":")[1]
         conn = get_db()
         rows = conn.execute(q(
-            "SELECT user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches "
-            "WHERE (s_city = ? OR e_city = ?) AND status = 'active' ORDER BY time_info LIMIT 10"
+            "SELECT user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE status = 'active' AND (s_city = ? OR e_city = ?) ORDER BY time_info LIMIT 10"
         ), (city, city)).fetchall()
         conn.close()
 
         if not rows:
             safe_reply(event.reply_token, TextSendMessage(
-                text=f"😔 目前 {city} 沒有生效中的行程，請稍後再試，或先發布你的行程讓系統主動媒合！",
+                text=f"📭 目前 {city} 方向暫無行程。\n你可以發布行程讓別人找到你！",
                 quick_reply=QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="🚗 我要載客/貨", text="我要載客/貨")),
-                    QuickReplyButton(action=MessageAction(label="🙋 我要搭車/寄物", text="我要搭車/寄物")),
+                    QuickReplyButton(action=MessageAction(label="🙋 我要搭車/寄物", text="我要搭車/寄物"))
                 ])
             ))
             return
 
         cols = []
         for r in rows:
-            utype, tinfo, sc, sd, ec, ed, fee, pcount, lid = r
-            role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
-            title_str = f"{role} | {tinfo[5:16]}"
-            text_str = f"{sc}{sd} ➔ {ec}{ed}\n{fee} | {pcount}人"
+            utype, tinfo, sc, sd, ec, ed, fee, pc, lid = r
+            icon = "🚗" if utype == 'driver' else "🙋"
+            title = f"{icon} {sc}{sd[:2]} → {ec}{ed[:2]}"[:40]
+            text = f"{tinfo[5:16]} | {pc}人 | {fee}"[:60]
             if lid:
-                action = PostbackAction(label="💬 聯絡", data=f"contact_line={lid}")
+                action = URIAction(label="💬 加LINE聯絡", uri=f"https://line.me/ti/p/~{lid}")
             else:
-                action = MessageAction(label="未提供聯絡", text="幫助")
-            cols.append(CarouselColumn(
-                title=title_str[:40],
-                text=text_str[:60],
-                actions=[action, MessageAction(label="🔍 找更多", text=f"找縣市:{city}")]
-            ))
+                action = MessageAction(label="未提供聯絡方式", text="找行程")
+            cols.append(CarouselColumn(title=title, text=text, actions=[action]))
+
         safe_reply(event.reply_token, TemplateSendMessage(
-            alt_text=f"{city} 的行程列表",
-            template=CarouselTemplate(columns=cols[:10])
+            alt_text=f"{city} 附近行程",
+            template=CarouselTemplate(columns=cols)
         ))
         return
+
 
     # --- 開始發布流程 ---
     if msg in ["我要載客/貨", "我要搭車/寄物"]:
@@ -1033,11 +1019,13 @@ def handle_message(event):
 
     elif msg.startswith("彈性:"):
         conn = get_db()
-        res = conn.execute(q('SELECT temp_count, temp_fee, temp_way FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        # 若中途未選，預設接受
+        res = conn.execute(q('SELECT temp_count, temp_fee, temp_way, temp_expire FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+        conn.execute(q('UPDATE user_state SET temp_flex = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
+        # 若中途/有效天數未選，設預設值
         if res and not res[2]:
             conn.execute(q('UPDATE user_state SET temp_way = ? WHERE user_id = ?'), ('接受', uid))
-        conn.execute(q('UPDATE user_state SET temp_flex = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
+        if res and not res[3]:
+            conn.execute(q('UPDATE user_state SET temp_expire = ? WHERE user_id = ?'), ('3', uid))
         conn.commit()
         conn.close()
 
@@ -1049,13 +1037,13 @@ def handle_message(event):
             if not pc: missing.append("人數")
             if not fe: missing.append("費用方式")
             safe_reply(event.reply_token, TextSendMessage(
-                text=f"⚠️ {'、'.join(missing)} 尚未選擇，請返回補填。",
+                text=f"⚠️ {'、'.join(missing)} 尚未選擇，請返回卡片補填。",
                 quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="↩ 返回重填細節", text="繼續填寫"))
+                    QuickReplyButton(action=MessageAction(label="↩ 返回設定", text="繼續填寫"))
                 ])
             ))
         else:
-            safe_reply(event.reply_token, get_main_cat_menu("最後一步：自定義規範。"))
+            safe_reply(event.reply_token, get_main_cat_menu("最後一步：自定義規範（可直接跳過發布）"))
 
     elif msg.startswith("類別:"):
         cat = msg.split(":")[1]
