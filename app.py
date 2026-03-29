@@ -371,11 +371,13 @@ def get_detail_flex():
                 {"type": "text", "text": "費用方式", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "私訊議價", "text": "費用:私訊議價"}},
+                     "action": {"type": "message", "label": "議價", "text": "費用:私訊議價"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "請喝飲料", "text": "費用:請喝飲料"}},
+                     "action": {"type": "message", "label": "飲料", "text": "費用:請喝飲料"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "免費公益", "text": "費用:免費公益"}}
+                     "action": {"type": "message", "label": "公益", "text": "費用:免費公益"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "免費", "text": "費用:免費"}}
                 ]},
                 {"type": "separator"},
                 {"type": "text", "text": "有效天數（預設3天，可跳過）", "size": "sm", "color": "#888780"},
