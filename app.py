@@ -312,13 +312,23 @@ def get_publish_confirm_flex(res_data, match_id):
     return FlexSendMessage(alt_text="行程發布成功", contents=bubble)
 
 def get_main_cat_menu():
-    def _row(items):
-        return {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-             "action": {"type": "message", "label": lbl, "text": f"規範:{txt}"}}
-            for lbl, txt in items
-        ]}
-    def _bubble(title, rows):
+    def _rows(items):
+        """每排2個，奇數最後一個撐滿整排"""
+        result = []
+        for i in range(0, len(items), 2):
+            pair = items[i:i+2]
+            if len(pair) == 2:
+                result.append({"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": lbl, "text": f"規範:{txt}"}}
+                    for lbl, txt in pair
+                ]})
+            else:
+                lbl, txt = pair[0]
+                result.append({"type": "button", "style": "secondary", "height": "sm",
+                                "action": {"type": "message", "label": lbl, "text": f"規範:{txt}"}})
+        return result
+    def _bubble(title, items):
         return {
             "type": "bubble",
             "header": {
@@ -326,7 +336,7 @@ def get_main_cat_menu():
                 "contents": [{"type": "text", "text": title, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
                 "backgroundColor": "#444441"
             },
-            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": rows},
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": _rows(items)},
             "footer": {"type": "box", "layout": "vertical", "contents": [
                 {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                  "action": {"type": "message", "label": "🚀 直接發布", "text": "最終確認發布"}}
@@ -334,29 +344,38 @@ def get_main_cat_menu():
         }
     bubbles = [
         _bubble("🚗 車內規定", [
-            _row([("禁菸禁檳榔", "全程禁菸禁檳榔"), ("禁止飲食", "禁止飲食"), ("可飲水", "可飲水")]),
-            _row([("保持整潔", "請保持車內整潔"), ("行車記錄器", "有行車記錄器"), ("兒童座椅", "車內有兒童座椅")]),
-            _row([("寵物裝籠", "寵物需裝籠推車"), ("謝絕寵物", "謝絕寵物"), ("依司機安排", "座位依司機安排")])
+            ("禁菸禁檳榔", "全程禁菸禁檳榔"), ("禁止飲食", "禁止飲食"),
+            ("可飲水", "可飲水"), ("保持整潔", "請保持車內整潔"),
+            ("行車記錄器", "有行車記錄器"), ("兒童座椅", "車內有兒童座椅"),
+            ("寵物裝籠", "寵物需裝籠推車"), ("謝絕寵物", "謝絕寵物"),
+            ("依司機安排", "座位依司機安排"),
         ]),
         _bubble("💬 乘車風格", [
-            _row([("歡迎聊天", "歡迎聊天"), ("安靜為主", "安靜為主"), ("可睡覺聽歌", "可睡覺聽歌")]),
-            _row([("歡迎攜伴", "歡迎攜伴同行"), ("可帶外食", "可帶外食上車"), ("限同性乘客", "限同性乘客")])
+            ("歡迎聊天", "歡迎聊天"), ("安靜為主", "安靜為主"),
+            ("可睡覺聽歌", "可睡覺聽歌"), ("歡迎攜伴", "歡迎攜伴同行"),
+            ("可帶外食", "可帶外食上車"), ("限同性乘客", "限同性乘客"),
         ]),
         _bubble("🛣️ 路線偏好", [
-            _row([("順路為主", "順路為主"), ("接受繞路", "接受繞路接送"), ("討論上下車", "可討論上下車點")]),
-            _row([("走交流道", "高速交流道為主"), ("可停休息站", "可停休息站"), ("依司機路線", "依司機路線為準")]),
-            _row([("回程順載", "回程願意順載"), ("固定通勤", "固定通勤路線"), ("長期通勤", "長期通勤歡迎")])
+            ("順路為主", "順路為主"), ("接受繞路", "接受繞路接送"),
+            ("討論上下車", "可討論上下車點"), ("走交流道", "高速交流道為主"),
+            ("可停休息站", "可停休息站"), ("依司機路線", "依司機路線為準"),
+            ("回程順載", "回程願意順載"), ("固定通勤", "固定通勤路線"),
+            ("長期通勤", "長期通勤歡迎"),
         ]),
         _bubble("💰 付款細節", [
-            _row([("不接受議價", "不接受議價"), ("轉帳現金", "轉帳現金皆可"), ("自備零錢", "請自備零錢")]),
-            _row([("先付後乘", "先付後乘"), ("到達付款", "到達後付款"), ("可開收據", "可開收據")]),
-            _row([("學生減免", "學生低收減免"), ("寵物免費", "寵物不另收費"), ("捐款抵費", "捐款抵費用")])
+            ("不接受議價", "不接受議價"), ("轉帳現金", "轉帳現金皆可"),
+            ("自備零錢", "請自備零錢"), ("先付後乘", "先付後乘"),
+            ("到達付款", "到達後付款"), ("可開收據", "可開收據"),
+            ("學生減免", "學生低收減免"), ("寵物免費", "寵物不另收費"),
+            ("捐款抵費", "捐款抵費用"),
         ]),
         _bubble("📦 行李與安全", [
-            _row([("行李請告知", "大型行李請告知"), ("行李限一件", "行李限一件"), ("拒超重行李", "不接受超重行李")]),
-            _row([("可寄小包裹", "可寄送小型包裹"), ("務必準時", "務必準時"), ("身分驗證", "需身分驗證乘車")]),
-            _row([("穩健駕駛", "穩健駕駛風格"), ("乘客責任險", "投保乘客責任險"), ("全程定位", "全程開啟定位")])
-        ])
+            ("行李請告知", "大型行李請告知"), ("行李限一件", "行李限一件"),
+            ("拒超重行李", "不接受超重行李"), ("可寄小包裹", "可寄送小型包裹"),
+            ("務必準時", "務必準時"), ("身分驗證", "需身分驗證乘車"),
+            ("穩健駕駛", "穩健駕駛風格"), ("乘客責任險", "投保乘客責任險"),
+            ("全程定位", "全程開啟定位"),
+        ]),
     ]
     return FlexSendMessage(alt_text="設定特殊需求", contents={"type": "carousel", "contents": bubbles})
 
