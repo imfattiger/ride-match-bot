@@ -207,6 +207,15 @@ def init_db():
     conn.commit()
     conn.close()
 
+def get_user_rating(conn, user_id):
+    """回傳 (avg_score, count)，無資料回傳 (None, 0)"""
+    row = conn.execute(q(
+        "SELECT AVG(r.score), COUNT(r.id) FROM ratings r JOIN matches m ON m.id = r.match_id WHERE m.user_id = ?"
+    ), (user_id,)).fetchone()
+    if row and row[1] and int(row[1]) > 0:
+        return round(float(row[0]), 1), int(row[1])
+    return None, 0
+
 _last_clean_ts = 0
 
 def clean_expired_matches():
@@ -618,14 +627,17 @@ def do_publish(uid, reply_token):
 
     if m_list:
         match_bubbles = []
+        rating_conn = get_db()
         for m in m_list:
             m_prefs_text = (m[9].strip().rstrip(",") if m[9] else "（未設定）")
             m_line_id = m[10] or ''
+            avg, cnt = get_user_rating(rating_conn, m[0])
+            rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
             if m_line_id:
                 contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                     "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{m_line_id}"}}
             else:
-                contact_btn = {"type": "button", "style": "secondary", "height": "sm", "color": "#888888",
+                contact_btn = {"type": "button", "style": "secondary", "height": "sm",
                     "action": {"type": "postback", "label": "📨 通知對方留聯絡方式", "data": f"action=contact_req&to={m[0]}&route={m[2]}{m[3]}→{m[4]}{m[5]}"}}
             match_bubbles.append({
                 "type": "bubble",
@@ -646,6 +658,9 @@ def do_publish(uid, reply_token):
                         {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": f"{m[8]}人", "color": "#333333", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": m_prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]}
                 ]},
@@ -659,6 +674,7 @@ def do_publish(uid, reply_token):
             # 被動推播：通知既有配對者（含發布者的 LINE ID）
             safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid))
 
+        rating_conn.close()
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
             contents={"type": "carousel", "contents": match_bubbles}))
     else:
@@ -879,13 +895,30 @@ def handle_postback(event):
             route = params.get('route', '（未知路線）')
             if target_uid:
                 safe_push(target_uid, TextSendMessage(
-                    text=f"👋 有人對你的行程感興趣！\n\n路線：{route}\n\n對方希望與你聯絡，若方便請回覆你的 LINE ID 給機器人，下次發布行程時填入，對方就能直接加你！",
+                    text=f"👋 有人想聯絡你的行程！\n路線：{route}\n\n點下方按鈕可直接把 LINE ID 傳給對方：",
                     quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="我要發布行程", text="我要載客/貨")),
-                        QuickReplyButton(action=MessageAction(label="我要搭車", text="我要搭車/寄物"))
+                        QuickReplyButton(action=PostbackAction(
+                            label="💬 回傳我的LINE ID",
+                            data=f"action=reply_line_id&to={uid}"
+                        ))
                     ])
                 ))
-            safe_reply(event.reply_token, TextSendMessage(text="✅ 已通知對方留下聯絡方式，若對方有填 LINE ID 下次就能直接聯絡！"))
+            safe_reply(event.reply_token, TextSendMessage(text="✅ 已通知對方，若對方回傳 LINE ID 你會立即收到！"))
+
+        elif data.startswith("action=reply_line_id"):
+            params = dict(parse_qsl(data))
+            to_uid = params.get('to', '')
+            conn = get_db()
+            if USE_PG:
+                conn.execute(q('''INSERT INTO user_state (user_id, step)
+                    VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
+                    (uid, f'SHARE_LINE_ID:{to_uid}'))
+            else:
+                conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)',
+                    (uid, f'SHARE_LINE_ID:{to_uid}'))
+            conn.commit()
+            conn.close()
+            safe_reply(event.reply_token, TextSendMessage(text="請直接輸入你的 LINE ID（如 @abc123），我們會立即傳給對方："))
     except Exception as e:
         logging.error(f"Postback error for {uid}: {e}")
         safe_reply(event.reply_token, TextSendMessage(text="⚠️ 操作發生錯誤，請重新嘗試。"))
@@ -967,19 +1000,33 @@ def handle_message(event):
         return
 
     elif msg == "找行程":
+        safe_reply(event.reply_token, TextSendMessage(
+            text="🔍 找行程：想找哪種？",
+            quick_reply=QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="🚗 找司機（我要搭）", text="找類型:driver")),
+                QuickReplyButton(action=MessageAction(label="🙋 找乘客（我要載）", text="找類型:seeker")),
+                QuickReplyButton(action=MessageAction(label="全部行程", text="找類型:all")),
+            ])
+        ))
+        return
+
+    elif msg.startswith("找類型:"):
+        ftype = msg.split(":")[1]
         btns = [
-            QuickReplyButton(action=MessageAction(label="北部", text="找地區:北部")),
-            QuickReplyButton(action=MessageAction(label="中部", text="找地區:中部")),
-            QuickReplyButton(action=MessageAction(label="南部", text="找地區:南部")),
-            QuickReplyButton(action=MessageAction(label="東部", text="找地區:東部")),
+            QuickReplyButton(action=MessageAction(label="北部", text=f"找地區:{ftype}:北部")),
+            QuickReplyButton(action=MessageAction(label="中部", text=f"找地區:{ftype}:中部")),
+            QuickReplyButton(action=MessageAction(label="南部", text=f"找地區:{ftype}:南部")),
+            QuickReplyButton(action=MessageAction(label="東部", text=f"找地區:{ftype}:東部")),
         ]
-        safe_reply(event.reply_token, TextSendMessage(text="🔍 找行程：請選擇你的出發/目的大區域：", quick_reply=QuickReply(items=btns)))
+        safe_reply(event.reply_token, TextSendMessage(text="請選擇大區域：", quick_reply=QuickReply(items=btns)))
         return
 
     elif msg.startswith("找地區:"):
-        area = msg.split(":")[1]
+        parts = msg.split(":")
+        ftype = parts[1] if len(parts) == 3 else "all"
+        area = parts[2] if len(parts) == 3 else parts[1]
         cities = CITY_DATA.get(area, [])
-        btns = [QuickReplyButton(action=MessageAction(label=c, text=f"找縣市:{c}")) for c in cities]
+        btns = [QuickReplyButton(action=MessageAction(label=c, text=f"找縣市:{ftype}:{c}")) for c in cities]
         safe_reply(event.reply_token, TextSendMessage(
             text=f"已選 {area}，請選擇縣市：",
             quick_reply=QuickReply(items=btns)
@@ -987,16 +1034,24 @@ def handle_message(event):
         return
 
     elif msg.startswith("找縣市:"):
-        city = msg.split(":")[1]
+        parts = msg.split(":")
+        ftype = parts[1] if len(parts) == 3 else "all"
+        city = parts[2] if len(parts) == 3 else parts[1]
         conn = get_db()
-        rows = conn.execute(q(
-            "SELECT user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE status = 'active' AND (s_city = ? OR e_city = ?) ORDER BY time_info LIMIT 10"
-        ), (city, city)).fetchall()
-        conn.close()
+        if ftype == "all":
+            rows = conn.execute(q(
+                "SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE status = 'active' AND (s_city = ? OR e_city = ?) ORDER BY time_info LIMIT 10"
+            ), (city, city)).fetchall()
+        else:
+            rows = conn.execute(q(
+                "SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE status = 'active' AND user_type = ? AND (s_city = ? OR e_city = ?) ORDER BY time_info LIMIT 10"
+            ), (ftype, city, city)).fetchall()
 
         if not rows:
+            conn.close()
+            label = {"driver": "司機", "seeker": "乘客"}.get(ftype, "")
             safe_reply(event.reply_token, TextSendMessage(
-                text=f"📭 目前 {city} 方向暫無行程。\n你可以發布行程讓別人找到你！",
+                text=f"📭 目前 {city} 方向暫無{label}行程。\n你可以發布行程讓別人找到你！",
                 quick_reply=QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="🚗 我要載客/貨", text="我要載客/貨")),
                     QuickReplyButton(action=MessageAction(label="🙋 我要搭車/寄物", text="我要搭車/寄物"))
@@ -1004,21 +1059,49 @@ def handle_message(event):
             ))
             return
 
-        cols = []
+        bubbles = []
         for r in rows:
-            utype, tinfo, sc, sd, ec, ed, fee, pc, lid = r
+            trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid = r
+            avg, cnt = get_user_rating(conn, owner_uid)
+            rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
             icon = "🚗" if utype == 'driver' else "🙋"
-            title = f"{icon} {sc}{sd[:2]} → {ec}{ed[:2]}"[:40]
-            text = f"{tinfo[5:16]} | {pc}人 | {fee}"[:60]
+            role = "司機" if utype == 'driver' else "乘客"
+            hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
             if lid:
-                action = URIAction(label="💬 加LINE聯絡", uri=f"https://line.me/ti/p/~{lid}")
+                contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                    "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}}
             else:
-                action = MessageAction(label="未提供聯絡方式", text="找行程")
-            cols.append(CarouselColumn(title=title, text=text, actions=[action]))
-
-        safe_reply(event.reply_token, TemplateSendMessage(
+                contact_btn = {"type": "button", "style": "secondary", "height": "sm",
+                    "action": {"type": "postback", "label": "📨 通知對方留聯絡方式",
+                               "data": f"action=contact_req&to={owner_uid}&route={sc}{sd}→{ec}{ed}"}}
+            bubbles.append({
+                "type": "bubble",
+                "header": {"type": "box", "layout": "vertical",
+                    "contents": [{"type": "text", "text": f"{icon} {role}", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+                    "backgroundColor": hdr_color},
+                "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": tinfo[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                ]},
+                "footer": {"type": "box", "layout": "vertical", "contents": [contact_btn]}
+            })
+        conn.close()
+        safe_reply(event.reply_token, FlexSendMessage(
             alt_text=f"{city} 附近行程",
-            template=CarouselTemplate(columns=cols)
+            contents={"type": "carousel", "contents": bubbles}
         ))
         return
 
@@ -1219,6 +1302,20 @@ def handle_message(event):
         except Exception as e:
             _store_log("fallback_db_error", str(e))
             res = None
+
+        # 處理回傳 LINE ID 給詢問者
+        if res and res[0] and res[0].startswith('SHARE_LINE_ID:'):
+            to_uid = res[0].split(':', 1)[1]
+            line_id = msg.strip().lstrip('@')
+            conn2 = get_db()
+            conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+            conn2.commit()
+            conn2.close()
+            safe_push(to_uid, TextSendMessage(
+                text=f"✅ 對方回覆了 LINE ID：@{line_id}\n點此加好友：https://line.me/ti/p/~{line_id}"
+            ))
+            safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已將你的 LINE ID（@{line_id}）傳給對方！"))
+            return
 
         # 處理 LINE ID 輸入
         if res and res[0] == 'WAIT_LINE_ID':
