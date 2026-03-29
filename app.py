@@ -495,7 +495,9 @@ def get_welcome_flex():
                 {"type": "button", "style": "primary", "color": "#00b900", "height": "sm",
                  "action": {"type": "message", "label": "🚗 我要載客/貨", "text": "我要載客/貨"}},
                 {"type": "button", "style": "primary", "color": "#1e90ff", "height": "sm",
-                 "action": {"type": "message", "label": "🙋 我要搭車/寄物", "text": "我要搭車/寄物"}}
+                 "action": {"type": "message", "label": "🙋 我要搭車/寄物", "text": "我要搭車/寄物"}},
+                {"type": "button", "style": "secondary", "height": "sm",
+                 "action": {"type": "message", "label": "🔍 瀏覽現有行程", "text": "找行程"}}
             ]
         }
     }
@@ -532,6 +534,13 @@ def get_rules_flex():
                     {"type": "text", "text": "🔔 自動通知＆過期", "weight": "bold", "size": "sm"},
                     {"type": "text", "text": "有人發布同向行程時，系統主動推播通知雙方。行程超過 24 小時自動隱藏。", "size": "xs", "color": "#666666", "wrap": True}
                 ]}
+            ]
+        },
+        "footer": {
+            "type": "box", "layout": "vertical",
+            "contents": [
+                {"type": "button", "style": "secondary", "height": "sm",
+                 "action": {"type": "message", "label": "📖 回到使用說明", "text": "幫助"}}
             ]
         }
     }
