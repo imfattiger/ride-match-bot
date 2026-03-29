@@ -508,7 +508,9 @@ def get_welcome_flex():
                 {"type": "button", "style": "primary", "color": "#1e90ff", "height": "sm",
                  "action": {"type": "message", "label": "🙋 我要搭車/寄物", "text": "我要搭車/寄物"}},
                 {"type": "button", "style": "secondary", "height": "sm",
-                 "action": {"type": "message", "label": "🔍 瀏覽現有行程", "text": "找行程"}}
+                 "action": {"type": "message", "label": "🔍 瀏覽現有行程", "text": "找行程"}},
+                {"type": "button", "style": "secondary", "height": "sm",
+                 "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}}
             ]
         }
     }
