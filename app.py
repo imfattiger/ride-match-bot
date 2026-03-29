@@ -313,14 +313,20 @@ def get_publish_confirm_flex(res_data, match_id):
 
 def get_main_cat_menu(text_prefix=""):
     items = [
-        QuickReplyButton(action=MessageAction(label="🛣️ 路線與行程", text="類別:路線")),
-        QuickReplyButton(action=MessageAction(label="💰 費用與付款", text="類別:費用")),
-        QuickReplyButton(action=MessageAction(label="🚗 車內環境", text="類別:環境")),
-        QuickReplyButton(action=MessageAction(label="💬 乘車氛圍", text="類別:氛圍")),
-        QuickReplyButton(action=MessageAction(label="📦 行李與安全", text="類別:行李安全")),
-        QuickReplyButton(action=MessageAction(label="🚀 全部選好，發布！", text="最終確認發布"))
+        QuickReplyButton(action=MessageAction(label="禁菸禁檳榔", text="規範:全程禁菸禁檳榔")),
+        QuickReplyButton(action=MessageAction(label="謝絕寵物", text="規範:謝絕寵物")),
+        QuickReplyButton(action=MessageAction(label="禁止飲食", text="規範:禁止飲食")),
+        QuickReplyButton(action=MessageAction(label="歡迎聊天", text="規範:歡迎聊天")),
+        QuickReplyButton(action=MessageAction(label="安靜為主", text="規範:安靜為主")),
+        QuickReplyButton(action=MessageAction(label="行李請告知", text="規範:大型行李請告知")),
+        QuickReplyButton(action=MessageAction(label="順路為主", text="規範:順路為主")),
+        QuickReplyButton(action=MessageAction(label="更多選項", text="類別:更多")),
+        QuickReplyButton(action=MessageAction(label="🚀 直接發布", text="最終確認發布"))
     ]
-    return TextSendMessage(text=f"{text_prefix}請選擇欲加入的標籤分類：", quick_reply=QuickReply(items=items))
+    return TextSendMessage(
+        text=f"{text_prefix}特殊需求（選填，可直接發布）：",
+        quick_reply=QuickReply(items=items)
+    )
 
 def get_area_carousel(title="請選擇區域"):
     return TemplateSendMessage(alt_text=title, template=CarouselTemplate(columns=[
@@ -368,7 +374,7 @@ def get_detail_flex():
                      "action": {"type": "message", "label": "4人", "text": "人數:4"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "費用方式", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "乘客費用（你期望的收費方式）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "議價", "text": "費用:私訊議價"}},
@@ -382,7 +388,7 @@ def get_detail_flex():
                      "action": {"type": "message", "label": "免費", "text": "費用:免費"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "有效天數（預設3天，可跳過）", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "刊登天數（到期自動下架，預設3天）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "1天", "text": "有效:1"}},
@@ -583,7 +589,12 @@ def do_publish(uid, reply_token):
                         {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": m_prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]}
                 ]},
-                "footer": {"type": "box", "layout": "vertical", "contents": [contact_btn]}
+                "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                    contact_btn,
+                    {"type": "button", "style": "link", "height": "sm",
+                     "action": {"type": "uri", "label": "☕ 支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"},
+                     "color": "#aaaaaa"}
+                ]}
             })
             # 被動推播：通知既有配對者（含發布者的 LINE ID）
             safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid))
@@ -1007,7 +1018,10 @@ def handle_message(event):
             conn.execute(q('UPDATE user_state SET e_dist = ?, step = ? WHERE user_id = ?'), (d, "DONE", uid))
             conn.commit()
             conn.close()
-            safe_reply(event.reply_token, get_detail_flex())
+            safe_reply(event.reply_token, [
+                TextSendMessage(text="✅ 路線設定完成！\n\n接下來填寫行程細節：\n・中途：是否接受途中上下車\n・人數：最多幾位乘客\n・乘客費用：你希望的收費方式\n・刊登天數：行程在平台顯示幾天\n\n最後點「時間彈性」進入下一步 👇"),
+                get_detail_flex()
+            ])
 
     elif msg.startswith("中途:"):
         conn = get_db()
@@ -1063,6 +1077,20 @@ def handle_message(event):
 
     elif msg.startswith("類別:"):
         cat = msg.split(":")[1]
+        if cat == "更多":
+            items = [
+                QuickReplyButton(action=MessageAction(label="🛣️ 路線偏好", text="類別:路線")),
+                QuickReplyButton(action=MessageAction(label="💰 付款細節", text="類別:費用")),
+                QuickReplyButton(action=MessageAction(label="🚗 車內規定", text="類別:環境")),
+                QuickReplyButton(action=MessageAction(label="💬 乘車風格", text="類別:氛圍")),
+                QuickReplyButton(action=MessageAction(label="📦 行李保險", text="類別:行李安全")),
+                QuickReplyButton(action=MessageAction(label="🚀 直接發布", text="最終確認發布"))
+            ]
+            safe_reply(event.reply_token, TextSendMessage(
+                text="選擇需求分類（點進去再挑細項）：",
+                quick_reply=QuickReply(items=items)
+            ))
+            return
         cols = []
         if cat == "路線":
             cols = [
