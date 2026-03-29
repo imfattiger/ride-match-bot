@@ -312,54 +312,53 @@ def get_publish_confirm_flex(res_data, match_id):
     return FlexSendMessage(alt_text="行程發布成功", contents=bubble)
 
 def get_main_cat_menu():
-    bubble = {
-        "type": "bubble",
-        "header": {
-            "type": "box", "layout": "vertical",
-            "contents": [{"type": "text", "text": "特殊需求（選填，可直接發布）",
-                          "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
-            "backgroundColor": "#444441"
-        },
-        "body": {
-            "type": "box", "layout": "vertical", "spacing": "md",
-            "contents": [
-                {"type": "text", "text": "車內規定", "size": "sm", "color": "#888780"},
-                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "禁菸禁檳榔", "text": "規範:全程禁菸禁檳榔"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "禁止飲食", "text": "規範:禁止飲食"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "謝絕寵物", "text": "規範:謝絕寵物"}}
-                ]},
-                {"type": "separator"},
-                {"type": "text", "text": "乘車風格", "size": "sm", "color": "#888780"},
-                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "歡迎聊天", "text": "規範:歡迎聊天"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "安靜為主", "text": "規範:安靜為主"}}
-                ]},
-                {"type": "separator"},
-                {"type": "text", "text": "路線與行李", "size": "sm", "color": "#888780"},
-                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "順路為主", "text": "規範:順路為主"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "行李請告知", "text": "規範:大型行李請告知"}}
-                ]},
-                {"type": "separator"},
-                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "更多選項 ›", "text": "類別:更多"}},
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
-                     "color": "#1D9E75",
-                     "action": {"type": "message", "label": "🚀 直接發布", "text": "最終確認發布"}}
-                ]}
-            ]
+    def _row(items):
+        return {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+             "action": {"type": "message", "label": lbl, "text": f"規範:{txt}"}}
+            for lbl, txt in items
+        ]}
+    def _bubble(title, rows):
+        return {
+            "type": "bubble",
+            "header": {
+                "type": "box", "layout": "vertical",
+                "contents": [{"type": "text", "text": title, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+                "backgroundColor": "#444441"
+            },
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": rows},
+            "footer": {"type": "box", "layout": "vertical", "contents": [
+                {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                 "action": {"type": "message", "label": "🚀 直接發布", "text": "最終確認發布"}}
+            ]}
         }
-    }
-    return FlexSendMessage(alt_text="設定特殊需求", contents=bubble)
+    bubbles = [
+        _bubble("🚗 車內規定", [
+            _row([("禁菸禁檳榔", "全程禁菸禁檳榔"), ("禁止飲食", "禁止飲食"), ("可飲水", "可飲水")]),
+            _row([("保持整潔", "請保持車內整潔"), ("行車記錄器", "有行車記錄器"), ("兒童座椅", "車內有兒童座椅")]),
+            _row([("寵物裝籠", "寵物需裝籠推車"), ("謝絕寵物", "謝絕寵物"), ("依司機安排", "座位依司機安排")])
+        ]),
+        _bubble("💬 乘車風格", [
+            _row([("歡迎聊天", "歡迎聊天"), ("安靜為主", "安靜為主"), ("可睡覺聽歌", "可睡覺聽歌")]),
+            _row([("歡迎攜伴", "歡迎攜伴同行"), ("可帶外食", "可帶外食上車"), ("限同性乘客", "限同性乘客")])
+        ]),
+        _bubble("🛣️ 路線偏好", [
+            _row([("順路為主", "順路為主"), ("接受繞路", "接受繞路接送"), ("討論上下車", "可討論上下車點")]),
+            _row([("走交流道", "高速交流道為主"), ("可停休息站", "可停休息站"), ("依司機路線", "依司機路線為準")]),
+            _row([("回程順載", "回程願意順載"), ("固定通勤", "固定通勤路線"), ("長期通勤", "長期通勤歡迎")])
+        ]),
+        _bubble("💰 付款細節", [
+            _row([("不接受議價", "不接受議價"), ("轉帳現金", "轉帳現金皆可"), ("自備零錢", "請自備零錢")]),
+            _row([("先付後乘", "先付後乘"), ("到達付款", "到達後付款"), ("可開收據", "可開收據")]),
+            _row([("學生減免", "學生低收減免"), ("寵物免費", "寵物不另收費"), ("捐款抵費", "捐款抵費用")])
+        ]),
+        _bubble("📦 行李與安全", [
+            _row([("行李請告知", "大型行李請告知"), ("行李限一件", "行李限一件"), ("拒超重行李", "不接受超重行李")]),
+            _row([("可寄小包裹", "可寄送小型包裹"), ("務必準時", "務必準時"), ("身分驗證", "需身分驗證乘車")]),
+            _row([("穩健駕駛", "穩健駕駛風格"), ("乘客責任險", "投保乘客責任險"), ("全程定位", "全程開啟定位")])
+        ])
+    ]
+    return FlexSendMessage(alt_text="設定特殊需求", contents={"type": "carousel", "contents": bubbles})
 
 def get_area_carousel(title="請選擇區域"):
     return TemplateSendMessage(alt_text=title, template=CarouselTemplate(columns=[
@@ -1108,111 +1107,6 @@ def handle_message(event):
         else:
             safe_reply(event.reply_token, get_main_cat_menu())
 
-    elif msg.startswith("類別:"):
-        cat = msg.split(":")[1]
-        if cat == "更多":
-            items = [
-                QuickReplyButton(action=MessageAction(label="🛣️ 路線偏好", text="類別:路線")),
-                QuickReplyButton(action=MessageAction(label="💰 付款細節", text="類別:費用")),
-                QuickReplyButton(action=MessageAction(label="🚗 車內規定", text="類別:環境")),
-                QuickReplyButton(action=MessageAction(label="💬 乘車風格", text="類別:氛圍")),
-                QuickReplyButton(action=MessageAction(label="📦 行李保險", text="類別:行李安全")),
-                QuickReplyButton(action=MessageAction(label="🚀 直接發布", text="最終確認發布"))
-            ]
-            safe_reply(event.reply_token, TextSendMessage(
-                text="選擇需求分類（點進去再挑細項）：",
-                quick_reply=QuickReply(items=items)
-            ))
-            return
-        cols = []
-        if cat == "路線":
-            cols = [
-                CarouselColumn(title='路線(1)', text='接送與繞路', actions=[
-                    MessageAction(label='順路為主', text='規範:順路為主'),
-                    MessageAction(label='接受繞路接送', text='規範:接受繞路接送'),
-                    MessageAction(label='可討論上下車點', text='規範:可討論上下車點')
-                ]),
-                CarouselColumn(title='路線(2)', text='路線安排', actions=[
-                    MessageAction(label='高速交流道為主', text='規範:高速交流道為主'),
-                    MessageAction(label='可停休息站', text='規範:可停休息站'),
-                    MessageAction(label='依司機路線為準', text='規範:依司機路線為準')
-                ]),
-                CarouselColumn(title='路線(3)', text='通勤模式', actions=[
-                    MessageAction(label='回程願意順載', text='規範:回程願意順載'),
-                    MessageAction(label='固定通勤路線', text='規範:固定通勤路線'),
-                    MessageAction(label='長期通勤歡迎', text='規範:長期通勤歡迎')
-                ])
-            ]
-        elif cat == "費用":
-            cols = [
-                CarouselColumn(title='費用(1)', text='付款方式', actions=[
-                    MessageAction(label='不接受議價', text='規範:不接受議價'),
-                    MessageAction(label='轉帳現金皆可', text='規範:轉帳現金皆可'),
-                    MessageAction(label='請自備零錢', text='規範:請自備零錢')
-                ]),
-                CarouselColumn(title='費用(2)', text='付款時機', actions=[
-                    MessageAction(label='先付後乘', text='規範:先付後乘'),
-                    MessageAction(label='到達後付款', text='規範:到達後付款'),
-                    MessageAction(label='可開收據', text='規範:可開收據')
-                ]),
-                CarouselColumn(title='費用(3)', text='優惠減免', actions=[
-                    MessageAction(label='學生低收減免', text='規範:學生低收減免'),
-                    MessageAction(label='寵物不另收費', text='規範:寵物不另收費'),
-                    MessageAction(label='捐款抵費用', text='規範:捐款抵費用')
-                ])
-            ]
-        elif cat == "環境":
-            cols = [
-                CarouselColumn(title='環境(1)', text='菸酒飲食', actions=[
-                    MessageAction(label='全程禁菸禁檳榔', text='規範:全程禁菸禁檳榔'),
-                    MessageAction(label='禁止飲食', text='規範:禁止飲食'),
-                    MessageAction(label='可飲水', text='規範:可飲水')
-                ]),
-                CarouselColumn(title='環境(2)', text='整潔與設備', actions=[
-                    MessageAction(label='請保持車內整潔', text='規範:請保持車內整潔'),
-                    MessageAction(label='有行車記錄器', text='規範:有行車記錄器'),
-                    MessageAction(label='車內有兒童座椅', text='規範:車內有兒童座椅')
-                ]),
-                CarouselColumn(title='環境(3)', text='寵物規定', actions=[
-                    MessageAction(label='寵物需裝籠推車', text='規範:寵物需裝籠推車'),
-                    MessageAction(label='謝絕寵物', text='規範:謝絕寵物'),
-                    MessageAction(label='座位依司機安排', text='規範:座位依司機安排')
-                ])
-            ]
-        elif cat == "氛圍":
-            cols = [
-                CarouselColumn(title='氛圍(1)', text='互動偏好', actions=[
-                    MessageAction(label='歡迎聊天', text='規範:歡迎聊天'),
-                    MessageAction(label='安靜為主', text='規範:安靜為主'),
-                    MessageAction(label='可睡覺聽歌', text='規範:可睡覺聽歌')
-                ]),
-                CarouselColumn(title='氛圍(2)', text='同行偏好', actions=[
-                    MessageAction(label='歡迎攜伴同行', text='規範:歡迎攜伴同行'),
-                    MessageAction(label='可帶外食上車', text='規範:可帶外食上車'),
-                    MessageAction(label='限同性乘客', text='規範:限同性乘客')
-                ])
-            ]
-        elif cat == "行李安全":
-            cols = [
-                CarouselColumn(title='行李(1)', text='行李規定', actions=[
-                    MessageAction(label='大型行李請告知', text='規範:大型行李請告知'),
-                    MessageAction(label='行李限一件', text='規範:行李限一件'),
-                    MessageAction(label='不接受超重行李', text='規範:不接受超重行李')
-                ]),
-                CarouselColumn(title='行李(2)', text='包裹寄送', actions=[
-                    MessageAction(label='可寄送小型包裹', text='規範:可寄送小型包裹'),
-                    MessageAction(label='務必準時', text='規範:務必準時'),
-                    MessageAction(label='需身分驗證乘車', text='規範:需身分驗證乘車')
-                ]),
-                CarouselColumn(title='安全', text='駕駛與保險', actions=[
-                    MessageAction(label='穩健駕駛風格', text='規範:穩健駕駛風格'),
-                    MessageAction(label='投保乘客責任險', text='規範:投保乘客責任險'),
-                    MessageAction(label='全程開啟定位', text='規範:全程開啟定位')
-                ])
-            ]
-        if cols:
-            safe_reply(event.reply_token, TemplateSendMessage(alt_text='選擇規範', template=CarouselTemplate(columns=cols)))
-
     elif msg.startswith("規範:"):
         p = msg.split(":")[1]
         conn = get_db()
@@ -1221,10 +1115,16 @@ def handle_message(event):
         conn.execute(q('UPDATE user_state SET temp_prefs = ? WHERE user_id = ?'), (p_str, uid))
         conn.commit()
         conn.close()
-        safe_reply(event.reply_token, [
-            TextSendMessage(text=f"✅ 已加：{p}\n目前標籤：{p_str.rstrip(', ')}"),
-            get_main_cat_menu()
-        ])
+        safe_reply(event.reply_token, TextSendMessage(
+            text=f"✅ 已加：{p}\n目前：{p_str.rstrip(', ')}",
+            quick_reply=QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="繼續選標籤", text="繼續選標籤")),
+                QuickReplyButton(action=MessageAction(label="🚀 直接發布", text="最終確認發布"))
+            ])
+        ))
+
+    elif msg == "繼續選標籤":
+        safe_reply(event.reply_token, get_main_cat_menu())
 
     elif msg == "最終確認發布":
         conn = get_db()
