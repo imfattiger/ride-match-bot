@@ -23,6 +23,7 @@ app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+ADMIN_LINE_ID = os.getenv('ADMIN_LINE_ID', '')
 
 # --- 2. 全台灣行政區數據 ---
 CITY_DATA = {
@@ -496,7 +497,7 @@ def get_welcome_flex():
                     {"type": "text", "text": "4️⃣ 填寫細節後發布，系統自動媒合", "size": "sm", "wrap": True}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "隨時輸入「我的行程」管理已發布行程\n輸入「媒合規則」了解配對邏輯\n輸入「幫助」重新查看本說明", "size": "xs", "color": "#888888", "wrap": True}
+                {"type": "text", "text": "隨時輸入「我的行程」管理已發布行程\n輸入「媒合規則」了解配對邏輯\n輸入「幫助」重新查看本說明\n輸入「回報問題」送出建議或回饋", "size": "xs", "color": "#888888", "wrap": True}
             ]
         },
         "footer": {
@@ -966,10 +967,9 @@ def handle_message(event):
     # --- 我的行程 ---
     if msg == "我的行程":
         conn = get_db()
-        now = datetime.now().strftime("%Y-%m-%dT%H:%M")
         my_matches = conn.execute(
-            q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count FROM matches WHERE user_id = ? AND status = 'active' AND time_info >= ? ORDER BY time_info ASC LIMIT 10"),
-            (uid, now)
+            q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
+            (uid,)
         ).fetchall()
         conn.close()
 
@@ -1028,6 +1028,32 @@ def handle_message(event):
         return
 
     # --- 幫助 / 使用說明（Item 3）---
+    elif msg in ["回報問題", "建議", "意見回饋", "回饋", "feedback"]:
+        conn = get_db()
+        if USE_PG:
+            conn.execute(q('''INSERT INTO user_state (user_id, step)
+                VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
+                (uid, 'FEEDBACK'))
+        else:
+            conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)', (uid, 'FEEDBACK'))
+        conn.commit()
+        conn.close()
+        safe_reply(event.reply_token, TextSendMessage(
+            text="📝 請直接輸入你的問題或建議，送出後我們會收到通知：",
+            quick_reply=QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="取消", text="取消回報"))
+            ])
+        ))
+        return
+
+    elif msg == "取消回報":
+        conn = get_db()
+        conn.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+        conn.commit()
+        conn.close()
+        safe_reply(event.reply_token, TextSendMessage(text="已取消。"))
+        return
+
     elif msg in ["幫助", "使用說明", "help"]:
         safe_reply(event.reply_token, get_welcome_flex())
         return
@@ -1367,6 +1393,20 @@ def handle_message(event):
         except Exception as e:
             _store_log("fallback_db_error", str(e))
             res = None
+
+        # 處理意見回饋
+        if res and res[0] == 'FEEDBACK':
+            feedback_text = msg.strip()
+            conn2 = get_db()
+            conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+            conn2.commit()
+            conn2.close()
+            if ADMIN_LINE_ID:
+                safe_push(ADMIN_LINE_ID, TextSendMessage(
+                    text=f"📬 用戶回饋（uid: {uid[:12]}...）\n\n{feedback_text}"
+                ))
+            safe_reply(event.reply_token, TextSendMessage(text="✅ 已收到！感謝你的回饋，我們會持續改善 🙏"))
+            return
 
         # 處理編輯行程 LINE ID
         if res and res[0] and res[0].startswith('EDIT_LINE_ID:'):
