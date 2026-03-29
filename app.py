@@ -56,9 +56,9 @@ DISTRICT_DATA = {
 }
 
 CITY_WEIGHTS = {
-    "基隆市": 1, "台北市": 2, "新北市": 3, "桃園市": 4, "新竹縣": 5, "新竹市": 5,
-    "苗栗縣": 6, "台中市": 7, "彰化縣": 8, "南投縣": 9, "雲林縣": 10, "嘉義縣": 11,
-    "嘉義市": 11, "台南市": 12, "高雄市": 13, "屏東縣": 14, "宜蘭縣": 15, "花蓮縣": 16, "台東縣": 17
+    "基隆市": 1, "台北市": 2, "新北市": 3, "桃園市": 4, "新竹市": 5, "新竹縣": 5.2,
+    "苗栗縣": 6, "台中市": 7, "彰化縣": 8, "南投縣": 9, "雲林縣": 10, "嘉義市": 11,
+    "嘉義縣": 11.2, "台南市": 12, "高雄市": 13, "屏東縣": 14, "宜蘭縣": 15, "花蓮縣": 16, "台東縣": 17
 }
 
 # --- 同縣市區域分群（Item 8）---
@@ -89,17 +89,23 @@ DISTRICT_GROUPS = {
     "台南市": {
         "市區": ["東區", "北區", "南區", "中西區", "安平區"],
         "外圍": ["永康區", "安南區", "仁德區", "歸仁區"]
+    },
+    "桃園市": {
+        "北": ["龜山區", "林口區", "蘆竹區"],
+        "市區": ["桃園區", "中壢區", "八德區", "平鎮區"],
+        "南": ["楊梅區", "新屋區", "觀音區"],
+        "東": ["大溪區", "復興區"]
     }
 }
 
 def get_district_cluster(city, dist):
     groups = DISTRICT_GROUPS.get(city)
     if not groups:
-        return dist
+        return city  # 無分群定義的城市：同市即視為同群
     for cluster_name, districts in groups.items():
         if dist in districts:
             return cluster_name
-    return dist
+    return city  # 找不到分群：fallback 整個城市
 
 # --- 3. 資料庫（支援 PostgreSQL + SQLite 雙模式）---
 DB_NAME = 'ridematch_v15.db'
@@ -641,7 +647,7 @@ def do_publish(uid, reply_token):
                 contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                     "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{m_line_id}"}}
             else:
-                contact_btn = {"type": "button", "style": "secondary", "height": "sm",
+                contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
                     "action": {"type": "postback", "label": "📨 通知對方留聯絡方式", "data": f"action=contact_req&to={m[0]}&route={m[2]}{m[3]}→{m[4]}{m[5]}"}}
             match_bubbles.append({
                 "type": "bubble",
@@ -713,8 +719,11 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     except:
         s_range, e_range = t_info, t_info
 
-    s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
-    user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
+    if sc == ec:
+        user_direction = 0  # 明確同縣市
+    else:
+        s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
+        user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
 
     c.execute(q("SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id FROM matches WHERE user_type = ? AND user_id != ? AND status = 'active' AND time_info BETWEEN ? AND ?"),
               [target_type, user_id, s_range, e_range])
@@ -725,8 +734,11 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
 
     for m in raw_res:
         m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id = m
-        m_s_w, m_e_w = CITY_WEIGHTS.get(m_sc, 0), CITY_WEIGHTS.get(m_ec, 0)
-        match_direction = 1 if m_e_w > m_s_w else (-1 if m_e_w < m_s_w else 0)
+        if m_sc == m_ec:
+            match_direction = 0
+        else:
+            m_s_w, m_e_w = CITY_WEIGHTS.get(m_sc, 0), CITY_WEIGHTS.get(m_ec, 0)
+            match_direction = 1 if m_e_w > m_s_w else (-1 if m_e_w < m_s_w else 0)
 
         if user_direction != match_direction:
             continue
@@ -1162,7 +1174,7 @@ def handle_message(event):
                 contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                     "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}}
             else:
-                contact_btn = {"type": "button", "style": "secondary", "height": "sm",
+                contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
                     "action": {"type": "postback", "label": "📨 通知對方留聯絡方式",
                                "data": f"action=contact_req&to={owner_uid}&route={sc}{sd}→{ec}{ed}"}}
             bubbles.append({
