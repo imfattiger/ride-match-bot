@@ -186,7 +186,8 @@ def init_db():
             user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT,
             s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT,
             temp_way TEXT, temp_count TEXT, temp_fee TEXT,
-            temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT)''')
+            temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT,
+            agreed_terms INTEGER DEFAULT 0)''')
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (
             id SERIAL PRIMARY KEY, rater_id TEXT, ratee_id TEXT, match_id INTEGER,
             score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
@@ -201,6 +202,7 @@ def init_db():
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS expires_at TEXT",
             "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_line_id TEXT",
             "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_expire TEXT",
+            "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS agreed_terms INTEGER DEFAULT 0",
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0",
             "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS rater_id TEXT",
             "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS ratee_id TEXT",
@@ -211,7 +213,7 @@ def init_db():
             except: pass
     else:
         c.execute('''CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT, agreed_terms INTEGER DEFAULT 0)''')
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, rater_id TEXT, ratee_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT", "view_count INTEGER DEFAULT 0"]:
@@ -220,6 +222,8 @@ def init_db():
         try: c.execute('ALTER TABLE user_state ADD COLUMN temp_line_id TEXT')
         except: pass
         try: c.execute('ALTER TABLE user_state ADD COLUMN temp_expire TEXT')
+        except: pass
+        try: c.execute('ALTER TABLE user_state ADD COLUMN agreed_terms INTEGER DEFAULT 0')
         except: pass
         for col in ["rater_id TEXT", "ratee_id TEXT"]:
             try: c.execute(f'ALTER TABLE ratings ADD COLUMN {col}')
@@ -494,6 +498,61 @@ def get_detail_flex():
     return FlexSendMessage(alt_text="設定行程細節", contents=bubble)
 
 
+# --- 免責聲明 Flex 卡片 ---
+def get_terms_flex():
+    def _bubble(title, lines, is_last=False):
+        body_contents = [{"type": "text", "text": line, "size": "xs", "color": "#333333", "wrap": True, "margin": "md"} for line in lines]
+        bubble = {
+            "type": "bubble",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#CC0000",
+                "contents": [{"type": "text", "text": title, "weight": "bold", "color": "#FFFFFF", "size": "sm"}]},
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_contents}
+        }
+        if is_last:
+            bubble["footer"] = {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                {"type": "button", "style": "primary", "color": "#CC0000", "height": "sm",
+                 "action": {"type": "postback", "label": "✅ 我已閱讀並同意使用條款", "data": "action=agree_terms"}},
+                {"type": "text", "text": "點擊同意後即可開始使用服務", "size": "xxs", "color": "#999999", "align": "center"}
+            ]}
+        return bubble
+
+    bubbles = [
+        _bubble("⚖️ 1/5 平台性質與法規", [
+            "• RideMatch 為「資訊媒合平台」，僅提供行程配對服務，非汽車運輸業者。",
+            "• 本平台不經營、調度或管理任何運輸服務，不對使用者之間的共乘行為進行控制或監督。",
+            "• 依《公路法》第77條及《汽車運輸業管理規則》，未經許可經營汽車運輸業屬違法行為（罰鍰新台幣5萬至15萬元，得按次連續處罰）。",
+            "• 本平台明確禁止任何使用者將本服務用於收費載客營業。使用者若以營利為目的反覆載客，其法律責任由使用者自行承擔。"
+        ]),
+        _bubble("💰 2/5 費用分攤原則", [
+            "• 本平台僅適用於「順路共乘」場景，費用分攤應限於油資與過路費等實際成本。",
+            "• 費用不得超過該趟行程之合理成本，嚴禁以營利為目的收取費用。",
+            "• 本平台不設定、建議或介入任何費用金額，所有費用由共乘雙方自行協商。",
+            "• 本平台目前不經手任何金流，未來若加入付款功能將另行公告並更新條款。",
+            "• 參考：過往 Uber 因媒合未持牌駕駛收費載客，累計遭罰逾億元新台幣，前車之鑑請使用者務必遵守相關法規。"
+        ]),
+        _bubble("🛡️ 3/5 安全與保險", [
+            "• 共乘過程中的人身安全、財物安全由使用者自行評估與承擔。",
+            "• 本平台不對搭乘過程中發生之任何事故、傷害、財物損失、行程延誤或取消負責。",
+            "• 本平台不提供任何形式之保險保障。",
+            "• 駕駛人應確認持有有效駕照、車輛已通過定期檢驗，並自行確認車輛保險是否涵蓋共乘情境（部分保險公司可能將共乘視為營業行為而拒絕理賠）。",
+            "• 乘客搭乘前應自行評估風險，建議告知親友行程資訊。"
+        ]),
+        _bubble("🔒 4/5 個人資料與隱私", [
+            "• 依《個人資料保護法》，本平台蒐集使用者行程資料（路線、時間、聯絡方式）僅作為配對媒合用途。",
+            "• 配對成功後，雙方可見對方公開資訊（路線、時間、LINE ID 等），使用者應妥善保護自身個資。",
+            "• 嚴禁利用本平台取得之個人資料進行騷擾、詐騙、跟蹤或其他不法行為，違者將立即停權並配合司法機關調查。",
+            "• 本平台資料儲存於雲端伺服器，使用者有權要求查閱、更正或刪除個人資料。"
+        ]),
+        _bubble("📋 5/5 免責與爭議處理", [
+            "• 使用者之間因共乘產生之任何民事、刑事糾紛，由當事人自行解決，與本平台無涉。",
+            "• 本平台保留隨時修改服務條款、暫停或終止服務之權利。",
+            "• 本平台保留停權違規使用者之權利，不另行通知。",
+            "• 本條款之解釋與適用以中華民國法律為準據法，如有爭議以台灣台北地方法院為第一審管轄法院。",
+            "• 使用本服務即表示您已詳閱並同意上述所有條款。"
+        ], is_last=True)
+    ]
+    return FlexSendMessage(alt_text="【重要】使用條款與免責聲明（請詳閱後同意）", contents={"type": "carousel", "contents": bubbles})
+
 # --- 歡迎訊息 Flex 卡片（Item 3）---
 def get_welcome_flex():
     bubble = {
@@ -530,7 +589,9 @@ def get_welcome_flex():
                 {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
                  "action": {"type": "message", "label": "🔍 瀏覽現有行程", "text": "找行程"}},
                 {"type": "button", "style": "secondary", "height": "sm",
-                 "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}}
+                 "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}},
+                {"type": "button", "style": "primary", "height": "sm", "color": "#CC0000",
+                 "action": {"type": "message", "label": "⚖️ 免責聲明與使用條款", "text": "免責聲明"}}
             ]
         }
     }
@@ -872,7 +933,15 @@ def callback():
 # --- 7. FollowEvent（歡迎訊息，Item 3）---
 @handler.add(FollowEvent)
 def handle_follow(event):
-    safe_reply(event.reply_token, get_welcome_flex())
+    uid = event.source.user_id
+    conn = get_db()
+    if USE_PG:
+        conn.execute(q('INSERT INTO user_state (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING'), (uid,))
+    else:
+        conn.execute('INSERT OR IGNORE INTO user_state (user_id) VALUES (?)', (uid,))
+    conn.commit()
+    conn.close()
+    safe_reply(event.reply_token, get_terms_flex())
 
 # --- 8. Postback 處理 ---
 @handler.add(PostbackEvent)
@@ -883,6 +952,29 @@ def handle_postback(event):
         return
 
     try:
+        if data == "action=agree_terms":
+            conn = get_db()
+            if USE_PG:
+                conn.execute(q('INSERT INTO user_state (user_id, agreed_terms) VALUES (?, 1) ON CONFLICT (user_id) DO UPDATE SET agreed_terms = 1'), (uid,))
+            else:
+                conn.execute('INSERT OR IGNORE INTO user_state (user_id) VALUES (?)', (uid,))
+                conn.execute('UPDATE user_state SET agreed_terms = 1 WHERE user_id = ?', (uid,))
+            conn.commit()
+            conn.close()
+            safe_reply(event.reply_token, [
+                TextSendMessage(text="✅ 感謝同意使用條款！歡迎使用 RideMatch 🎉"),
+                get_welcome_flex()
+            ])
+            return
+
+        # --- 同意 gate for postback ---
+        conn_chk = get_db()
+        agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+        conn_chk.close()
+        if not agreed_row or not agreed_row[0]:
+            safe_reply(event.reply_token, get_terms_flex())
+            return
+
         if data == "select_time":
             t = event.postback.params['datetime']
             conn = get_db()
@@ -1045,6 +1137,19 @@ def handle_postback(event):
 def handle_message(event):
     msg = event.message.text
     uid = event.source.user_id
+
+    # --- 免責同意 gate ---
+    if msg not in ["免責聲明", "使用條款"]:
+        conn_chk = get_db()
+        agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+        conn_chk.close()
+        if not agreed_row or not agreed_row[0]:
+            safe_reply(event.reply_token, get_terms_flex())
+            return
+
+    if msg in ["免責聲明", "使用條款"]:
+        safe_reply(event.reply_token, get_terms_flex())
+        return
 
     # --- 我的行程 ---
     if msg == "我的行程":
