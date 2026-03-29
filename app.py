@@ -188,8 +188,12 @@ def init_db():
             temp_way TEXT, temp_count TEXT, temp_fee TEXT,
             temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (
-            id SERIAL PRIMARY KEY, user_id TEXT, match_id INTEGER,
+            id SERIAL PRIMARY KEY, rater_id TEXT, ratee_id TEXT, match_id INTEGER,
             score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS pairs (
+            id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER,
+            uid_b TEXT, match_id_b INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         # 遷移既有資料表
         for stmt in [
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS line_id TEXT DEFAULT ''",
@@ -197,14 +201,19 @@ def init_db():
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS expires_at TEXT",
             "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_line_id TEXT",
             "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_expire TEXT",
-            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0"
+            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0",
+            "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS rater_id TEXT",
+            "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS ratee_id TEXT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS ratings_rater_match ON ratings(match_id, rater_id)",
+            "CREATE TABLE IF NOT EXISTS pairs (id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         ]:
             try: c.execute(stmt)
             except: pass
     else:
         c.execute('''CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, rater_id TEXT, ratee_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT", "view_count INTEGER DEFAULT 0"]:
             try: c.execute(f'ALTER TABLE matches ADD COLUMN {col}')
             except: pass
@@ -212,13 +221,18 @@ def init_db():
         except: pass
         try: c.execute('ALTER TABLE user_state ADD COLUMN temp_expire TEXT')
         except: pass
+        for col in ["rater_id TEXT", "ratee_id TEXT"]:
+            try: c.execute(f'ALTER TABLE ratings ADD COLUMN {col}')
+            except: pass
+        try: c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ratings_rater_match ON ratings(match_id, rater_id)')
+        except: pass
     conn.commit()
     conn.close()
 
 def get_user_rating(conn, user_id):
     """回傳 (avg_score, count)，無資料回傳 (None, 0)"""
     row = conn.execute(q(
-        "SELECT AVG(r.score), COUNT(r.id) FROM ratings r JOIN matches m ON m.id = r.match_id WHERE m.user_id = ?"
+        "SELECT AVG(score), COUNT(id) FROM ratings WHERE ratee_id = ?"
     ), (user_id,)).fetchone()
     if row and row[1] and int(row[1]) > 0:
         return round(float(row[0]), 1), int(row[1])
@@ -681,6 +695,16 @@ def do_publish(uid, reply_token):
                      "color": "#aaaaaa"}
                 ]}
             })
+            # 儲存配對關係
+            pair_conn = get_db()
+            if USE_PG:
+                pair_conn.execute(q('INSERT INTO pairs (uid_a, match_id_a, uid_b, match_id_b) VALUES (?,?,?,?)'),
+                                  (uid, new_id, m[0], m[11]))
+            else:
+                pair_conn.execute('INSERT OR IGNORE INTO pairs (uid_a, match_id_a, uid_b, match_id_b) VALUES (?,?,?,?)',
+                                  (uid, new_id, m[0], m[11]))
+            pair_conn.commit()
+            pair_conn.close()
             # 被動推播：通知既有配對者（含發布者的 LINE ID）
             safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid))
 
@@ -725,7 +749,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
         s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
         user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
 
-    c.execute(q("SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id FROM matches WHERE user_type = ? AND user_id != ? AND status = 'active' AND time_info BETWEEN ? AND ?"),
+    c.execute(q("SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id, id FROM matches WHERE user_type = ? AND user_id != ? AND status = 'active' AND time_info BETWEEN ? AND ?"),
               [target_type, user_id, s_range, e_range])
     raw_res = c.fetchall()
 
@@ -733,7 +757,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     user_p = int(p_count)
 
     for m in raw_res:
-        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id = m
+        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id = m
         if m_sc == m_ec:
             match_direction = 0
         else:
@@ -882,26 +906,70 @@ def handle_postback(event):
             conn = get_db()
             conn.execute(q("UPDATE matches SET status = 'completed' WHERE id = ? AND user_id = ?"), (match_id, uid))
             conn.commit()
+            pairs = conn.execute(q(
+                "SELECT uid_a, match_id_a, uid_b, match_id_b FROM pairs WHERE match_id_a = ? OR match_id_b = ?"
+            ), (match_id, match_id)).fetchall()
             conn.close()
-            safe_reply(event.reply_token, TextSendMessage(
-                text="🎉 恭喜完成行程！請為這趟體驗評分：",
-                quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=PostbackAction(label=f"{'⭐' * i}", data=f"action=rate&id={match_id}&score={i}"))
-                    for i in range(1, 6)
-                ])
-            ))
+
+            partners = []
+            for p in pairs:
+                ua, ma, ub, mb = p
+                if ua == uid:
+                    partners.append((ub, mb, ma))
+                else:
+                    partners.append((ua, ma, mb))
+
+            if partners:
+                partner_uid, partner_mid, my_mid = partners[0]
+                def _rate_qr(ratee, mid):
+                    return QuickReply(items=[
+                        QuickReplyButton(action=PostbackAction(
+                            label=f"{'⭐'*i}",
+                            data=f"action=rate&ratee={ratee}&match_id={mid}&score={i}"
+                        )) for i in range(1, 6)
+                    ])
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="🎉 行程完成！請為配對對象評分：",
+                    quick_reply=_rate_qr(partner_uid, partner_mid)
+                ))
+                safe_push(partner_uid, TextSendMessage(
+                    text="🔔 你的配對行程已完成！請為對方評分：",
+                    quick_reply=_rate_qr(uid, my_mid)
+                ))
+            else:
+                safe_reply(event.reply_token, TextSendMessage(text="🎉 行程已標記完成！"))
 
         elif data.startswith("action=rate"):
             params = dict(parse_qsl(data))
-            match_id, score = params.get('id'), params.get('score')
+            ratee_id = params.get('ratee')
+            match_id = params.get('match_id')
+            score = params.get('score')
+            if not ratee_id or not match_id or not score:
+                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 評分資料不完整。"))
+                return
+            if uid == ratee_id:
+                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 不能為自己評分。"))
+                return
             conn = get_db()
+            pair = conn.execute(q(
+                "SELECT id FROM pairs WHERE (uid_a = ? AND uid_b = ?) OR (uid_a = ? AND uid_b = ?)"
+            ), (uid, ratee_id, ratee_id, uid)).fetchone()
+            if not pair:
+                conn.close()
+                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到你們的配對記錄，無法評分。"))
+                return
             if USE_PG:
-                conn.execute(q('INSERT INTO ratings (user_id, match_id, score) VALUES (?, ?, ?)'), (uid, match_id, score))
+                conn.execute(q(
+                    'INSERT INTO ratings (rater_id, ratee_id, match_id, score) VALUES (?,?,?,?) ON CONFLICT (match_id, rater_id) DO NOTHING'
+                ), (uid, ratee_id, match_id, score))
             else:
-                conn.execute('INSERT INTO ratings (user_id, match_id, score) VALUES (?, ?, ?)', (uid, match_id, score))
+                conn.execute(
+                    'INSERT OR IGNORE INTO ratings (rater_id, ratee_id, match_id, score) VALUES (?,?,?,?)',
+                    (uid, ratee_id, match_id, score)
+                )
             conn.commit()
             conn.close()
-            safe_reply(event.reply_token, TextSendMessage(text=f"感謝評價！您給了 {'⭐' * int(score)} 的評分。"))
+            safe_reply(event.reply_token, TextSendMessage(text=f"感謝評價！你給了 {'⭐' * int(score)}"))
 
         elif data.startswith("action=cancel"):
             params = dict(parse_qsl(data))
