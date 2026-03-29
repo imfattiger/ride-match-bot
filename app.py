@@ -530,22 +530,31 @@ def get_terms_flex():
             ]}
         return bubble
 
+    def _bubble_with_footer(title, lines, footer_contents):
+        body_contents = [{"type": "text", "text": line, "size": "xs", "color": "#333333", "wrap": True, "margin": "md"} for line in lines]
+        return {
+            "type": "bubble",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#CC0000",
+                "contents": [{"type": "text", "text": title, "weight": "bold", "color": "#FFFFFF", "size": "sm"}]},
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_contents},
+            "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": footer_contents}
+        }
+
     bubbles = [
-        _bubble("⚖️ 1/5 平台性質與法規", [
+        _bubble("⚖️ 1/6 平台性質與法規", [
             "• sun car 順咖媒合 為「資訊媒合平台」，僅提供行程配對服務，非汽車運輸業者。",
             "• 本平台不經營、調度或管理任何運輸服務，不對使用者之間的共乘或帶貨行為進行控制或監督。",
             "• 依《公路法》第77條及《汽車運輸業管理規則》，未經許可經營汽車運輸業屬違法行為（罰鍰新台幣5萬至15萬元，得按次連續處罰）。",
             "• 本平台明確禁止任何使用者將本服務用於收費載客營業。使用者若以營利為目的反覆載客，其法律責任由使用者自行承擔。",
             "• 本平台亦適用「順路帶貨/寄物」場景，此屬一般民事委託行為，非貨運承攬業。使用者應自行確認物品合法性，嚴禁運送毒品、仿冒品、危險物品或其他違禁物，違者自負一切法律責任。"
         ]),
-        _bubble("💰 2/5 費用分攤原則", [
+        _bubble("💰 2/6 費用分攤原則", [
             "• 本平台僅適用於「順路共乘」場景，費用分攤應限於油資與過路費等實際成本。",
             "• 費用不得超過該趟行程之合理成本，嚴禁以營利為目的收取費用。",
             "• 本平台不設定、建議或介入任何費用金額，所有費用由共乘雙方自行協商。",
-            "• 本平台目前不經手任何金流，未來若加入付款功能將另行公告並更新條款。",
-            "• 參考：過往 Uber 因媒合未持牌駕駛收費載客，累計遭罰逾億元新台幣，前車之鑑請使用者務必遵守相關法規。"
+            "• 本平台目前不經手任何金流，未來若加入付款功能將另行公告並更新條款。"
         ]),
-        _bubble("🛡️ 3/5 安全與保險", [
+        _bubble("🛡️ 3/6 安全與保險", [
             "• 共乘過程中的人身安全、財物安全由使用者自行評估與承擔。",
             "• 本平台不對搭乘過程中發生之任何事故、傷害、財物損失、行程延誤或取消負責。",
             "• 本平台不提供任何形式之保險保障。",
@@ -553,19 +562,32 @@ def get_terms_flex():
             "• 乘客搭乘前應自行評估風險，建議告知親友行程資訊。",
             "• 順路帶貨/寄物之物品損毀、遺失、延誤，由委託人與帶貨方自行協議解決，本平台不承擔任何賠償責任。貴重物品請自行投保或勿委託陌生人攜帶。"
         ]),
-        _bubble("🔒 4/5 個人資料與隱私", [
+        _bubble("🔒 4/6 個人資料與隱私", [
             "• 依《個人資料保護法》，本平台蒐集使用者行程資料（路線、時間、聯絡方式）僅作為配對媒合用途。",
             "• 配對成功後，雙方可見對方公開資訊（路線、時間、LINE ID 等），使用者應妥善保護自身個資。",
             "• 嚴禁利用本平台取得之個人資料進行騷擾、詐騙、跟蹤或其他不法行為，違者將立即停權並配合司法機關調查。",
-            "• 本平台資料儲存於雲端伺服器，使用者有權要求查閱、更正或刪除個人資料。"
+            "• 如需刪除個人資料，請輸入「刪除我的資料」，系統將立即清除您的行程與使用記錄。如有其他個資問題請透過「回報問題」聯繫。"
         ]),
-        _bubble("📋 5/5 免責與爭議處理", [
+        _bubble("📋 5/6 免責與爭議處理", [
             "• 使用者之間因共乘產生之任何民事、刑事糾紛，由當事人自行解決，與本平台無涉。",
             "• 本平台保留隨時修改服務條款、暫停或終止服務之權利。",
             "• 本平台保留停權違規使用者之權利，不另行通知。",
             "• 本條款之解釋與適用以中華民國法律為準據法，如有爭議以台灣台北地方法院為第一審管轄法院。",
             "• 使用本服務即表示您已詳閱並同意上述所有條款。"
-        ], is_last=True)
+        ]),
+        _bubble_with_footer("👨‍💻 6/6 關於本服務", [
+            "• 本服務由一位台灣開發者利用業餘時間獨立開發與維護，目前無專職客服團隊。",
+            "• 遇到問題請輸入「回報問題」，開發者會盡力於 1~3 個工作天內回應，感謝包容。",
+            "• 伺服器採免費方案，首次回應可能有約 30 秒冷啟動延遲，非故障。",
+            "• 每次配對成功，系統會主動推播通知雙方，這會消耗 LINE 官方的每月推播額度。免費方案每月僅 200 則，平台越熱絡越快用完。額度耗盡後配對通知將無法發送。",
+            "• 如果這個服務對你有幫助，歡迎小額斗內支持升級方案，讓配對通知持續正常運作 ☕"
+        ], [
+            {"type": "button", "style": "primary", "color": "#CC0000", "height": "sm",
+             "action": {"type": "postback", "label": "✅ 我已閱讀並同意使用條款", "data": "action=agree_terms"}},
+            {"type": "button", "style": "link", "height": "sm", "color": "#aaaaaa",
+             "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}},
+            {"type": "text", "text": "點擊同意後即可開始使用服務", "size": "xxs", "color": "#999999", "align": "center"}
+        ])
     ]
     return FlexSendMessage(alt_text="【重要】使用條款與免責聲明（請詳閱後同意）", contents={"type": "carousel", "contents": bubbles})
 
@@ -1302,6 +1324,17 @@ def handle_message(event):
 
     elif msg in ["幫助", "使用說明", "help"]:
         safe_reply(event.reply_token, get_welcome_flex())
+        return
+
+    elif msg == "刪除我的資料":
+        conn = get_db()
+        conn.execute(q("DELETE FROM matches WHERE user_id = ?"), (uid,))
+        conn.execute(q("DELETE FROM user_state WHERE user_id = ?"), (uid,))
+        conn.commit()
+        conn.close()
+        safe_reply(event.reply_token, TextSendMessage(
+            text="✅ 已刪除你的所有行程與使用記錄。\n\n若日後想再使用，重新加入好友即可。"
+        ))
         return
 
     # --- 繼續填寫（Item 6）---
