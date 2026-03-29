@@ -1103,25 +1103,46 @@ def handle_message(event):
         return
 
     elif msg == "找行程":
-        safe_reply(event.reply_token, TextSendMessage(
-            text="🔍 找行程：想找哪種？",
-            quick_reply=QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="🚗 找司機（我要搭）", text="找類型:driver")),
-                QuickReplyButton(action=MessageAction(label="🙋 找乘客（我要載）", text="找類型:seeker")),
-                QuickReplyButton(action=MessageAction(label="全部行程", text="找類型:all")),
-            ])
-        ))
+        bubble = {
+            "type": "bubble",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#1D9E75",
+                "contents": [{"type": "text", "text": "🔍 瀏覽行程", "weight": "bold", "color": "#FFFFFF", "size": "md"}]},
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                 "action": {"type": "message", "label": "🚗 找司機（我要搭車）", "text": "找類型:driver"}},
+                {"type": "button", "style": "primary", "height": "sm", "color": "#1e90ff",
+                 "action": {"type": "message", "label": "🙋 找乘客（我要載人）", "text": "找類型:seeker"}},
+                {"type": "button", "style": "secondary", "height": "sm",
+                 "action": {"type": "message", "label": "📋 全部行程", "text": "找類型:all"}}
+            ]}
+        }
+        safe_reply(event.reply_token, FlexSendMessage(alt_text="瀏覽行程", contents=bubble))
         return
 
     elif msg.startswith("找類型:"):
         ftype = msg.split(":")[1]
-        btns = [
-            QuickReplyButton(action=MessageAction(label="北部", text=f"找地區:{ftype}:北部")),
-            QuickReplyButton(action=MessageAction(label="中部", text=f"找地區:{ftype}:中部")),
-            QuickReplyButton(action=MessageAction(label="南部", text=f"找地區:{ftype}:南部")),
-            QuickReplyButton(action=MessageAction(label="東部", text=f"找地區:{ftype}:東部")),
-        ]
-        safe_reply(event.reply_token, TextSendMessage(text="請選擇大區域：", quick_reply=QuickReply(items=btns)))
+        label_map = {"driver": "找司機", "seeker": "找乘客", "all": "全部行程"}
+        title = label_map.get(ftype, "找行程")
+        bubble = {
+            "type": "bubble",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#444441",
+                "contents": [{"type": "text", "text": f"📍 {title} — 選擇區域", "weight": "bold", "color": "#FFFFFF", "size": "sm"}]},
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
+                     "action": {"type": "message", "label": "北部", "text": f"找地區:{ftype}:北部"}},
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
+                     "action": {"type": "message", "label": "中部", "text": f"找地區:{ftype}:中部"}}
+                ]},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
+                     "action": {"type": "message", "label": "南部", "text": f"找地區:{ftype}:南部"}},
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
+                     "action": {"type": "message", "label": "東部", "text": f"找地區:{ftype}:東部"}}
+                ]}
+            ]}
+        }
+        safe_reply(event.reply_token, FlexSendMessage(alt_text="選擇區域", contents=bubble))
         return
 
     elif msg.startswith("找地區:"):
@@ -1129,11 +1150,24 @@ def handle_message(event):
         ftype = parts[1] if len(parts) == 3 else "all"
         area = parts[2] if len(parts) == 3 else parts[1]
         cities = CITY_DATA.get(area, [])
-        btns = [QuickReplyButton(action=MessageAction(label=c, text=f"找縣市:{ftype}:{c}")) for c in cities]
-        safe_reply(event.reply_token, TextSendMessage(
-            text=f"已選 {area}，請選擇縣市：",
-            quick_reply=QuickReply(items=btns)
-        ))
+        rows = []
+        for i in range(0, len(cities), 2):
+            pair = cities[i:i+2]
+            if len(pair) == 2:
+                rows.append({"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
+                     "action": {"type": "message", "label": c, "text": f"找縣市:{ftype}:{c}"}} for c in pair
+                ]})
+            else:
+                rows.append({"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                    "action": {"type": "message", "label": pair[0], "text": f"找縣市:{ftype}:{pair[0]}"}})
+        bubble = {
+            "type": "bubble",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#444441",
+                "contents": [{"type": "text", "text": f"🗺️ {area} — 選擇縣市", "weight": "bold", "color": "#FFFFFF", "size": "sm"}]},
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": rows}
+        }
+        safe_reply(event.reply_token, FlexSendMessage(alt_text=f"選擇{area}縣市", contents=bubble))
         return
 
     elif msg.startswith("找縣市:"):
