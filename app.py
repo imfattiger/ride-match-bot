@@ -195,6 +195,9 @@ def init_db():
             id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER,
             uid_b TEXT, match_id_b INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (
+            user_id TEXT PRIMARY KEY, reason TEXT,
+            blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         # 遷移既有資料表
         for stmt in [
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS line_id TEXT DEFAULT ''",
@@ -207,7 +210,8 @@ def init_db():
             "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS rater_id TEXT",
             "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS ratee_id TEXT",
             "CREATE UNIQUE INDEX IF NOT EXISTS ratings_rater_match ON ratings(match_id, rater_id)",
-            "CREATE TABLE IF NOT EXISTS pairs (id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            "CREATE TABLE IF NOT EXISTS pairs (id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         ]:
             try: c.execute(stmt)
             except: pass
@@ -216,6 +220,7 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT, agreed_terms INTEGER DEFAULT 0)''')
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, rater_id TEXT, ratee_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT", "view_count INTEGER DEFAULT 0"]:
             try: c.execute(f'ALTER TABLE matches ADD COLUMN {col}')
             except: pass
@@ -241,6 +246,15 @@ def get_user_rating(conn, user_id):
     if row and row[1] and int(row[1]) > 0:
         return round(float(row[0]), 1), int(row[1])
     return None, 0
+
+def is_blocked(uid):
+    try:
+        conn = get_db()
+        row = conn.execute(q("SELECT user_id FROM blocked_users WHERE user_id = ?"), (uid,)).fetchone()
+        conn.close()
+        return bool(row)
+    except:
+        return False
 
 _last_clean_ts = 0
 
@@ -294,7 +308,7 @@ def get_publish_confirm_flex(res_data, match_id):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res_data
     main_color = "#00b900" if ut == 'driver' else "#1e90ff"
     ps_text = ps.strip().rstrip(",") if ps else "（未選）"
-    share_text = f"🚗 共乘徵求！\n{sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人 | {fe}\n\n找順路旅伴就用 RideMatch"
+    share_text = f"🚗 共乘徵求！\n{sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人 | {fe}\n\n找順路旅伴就用 sun car 順咖媒合"
     share_url = f"https://line.me/R/msg/text/?{quote(share_text)}"
 
     bubble = {
@@ -518,10 +532,11 @@ def get_terms_flex():
 
     bubbles = [
         _bubble("⚖️ 1/5 平台性質與法規", [
-            "• RideMatch 為「資訊媒合平台」，僅提供行程配對服務，非汽車運輸業者。",
-            "• 本平台不經營、調度或管理任何運輸服務，不對使用者之間的共乘行為進行控制或監督。",
+            "• sun car 順咖媒合 為「資訊媒合平台」，僅提供行程配對服務，非汽車運輸業者。",
+            "• 本平台不經營、調度或管理任何運輸服務，不對使用者之間的共乘或帶貨行為進行控制或監督。",
             "• 依《公路法》第77條及《汽車運輸業管理規則》，未經許可經營汽車運輸業屬違法行為（罰鍰新台幣5萬至15萬元，得按次連續處罰）。",
-            "• 本平台明確禁止任何使用者將本服務用於收費載客營業。使用者若以營利為目的反覆載客，其法律責任由使用者自行承擔。"
+            "• 本平台明確禁止任何使用者將本服務用於收費載客營業。使用者若以營利為目的反覆載客，其法律責任由使用者自行承擔。",
+            "• 本平台亦適用「順路帶貨/寄物」場景，此屬一般民事委託行為，非貨運承攬業。使用者應自行確認物品合法性，嚴禁運送毒品、仿冒品、危險物品或其他違禁物，違者自負一切法律責任。"
         ]),
         _bubble("💰 2/5 費用分攤原則", [
             "• 本平台僅適用於「順路共乘」場景，費用分攤應限於油資與過路費等實際成本。",
@@ -535,7 +550,8 @@ def get_terms_flex():
             "• 本平台不對搭乘過程中發生之任何事故、傷害、財物損失、行程延誤或取消負責。",
             "• 本平台不提供任何形式之保險保障。",
             "• 駕駛人應確認持有有效駕照、車輛已通過定期檢驗，並自行確認車輛保險是否涵蓋共乘情境（部分保險公司可能將共乘視為營業行為而拒絕理賠）。",
-            "• 乘客搭乘前應自行評估風險，建議告知親友行程資訊。"
+            "• 乘客搭乘前應自行評估風險，建議告知親友行程資訊。",
+            "• 順路帶貨/寄物之物品損毀、遺失、延誤，由委託人與帶貨方自行協議解決，本平台不承擔任何賠償責任。貴重物品請自行投保或勿委託陌生人攜帶。"
         ]),
         _bubble("🔒 4/5 個人資料與隱私", [
             "• 依《個人資料保護法》，本平台蒐集使用者行程資料（路線、時間、聯絡方式）僅作為配對媒合用途。",
@@ -561,8 +577,8 @@ def get_welcome_flex():
             "type": "box", "layout": "vertical",
             "backgroundColor": "#00b900",
             "contents": [
-                {"type": "text", "text": "RideMatch 順路媒合", "weight": "bold", "color": "#FFFFFF", "size": "lg"},
-                {"type": "text", "text": "找到同方向的旅伴，省錢又環保", "color": "#FFFFFFBB", "size": "xs", "margin": "sm"}
+                {"type": "text", "text": "sun car 順咖媒合", "weight": "bold", "color": "#FFFFFF", "size": "lg"},
+                {"type": "text", "text": "共乘・帶貨・順路媒合，省錢又環保", "color": "#FFFFFFBB", "size": "xs", "margin": "sm"}
             ]
         },
         "body": {
@@ -570,7 +586,7 @@ def get_welcome_flex():
             "contents": [
                 {"type": "text", "text": "四步驟開始使用：", "weight": "bold", "size": "md"},
                 {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                    {"type": "text", "text": "1️⃣ 選擇身份：載客/貨 或 搭車/寄物", "size": "sm", "wrap": True},
+                    {"type": "text", "text": "1️⃣ 選擇身份：載客/貨（含順路帶貨）或 搭車/寄物", "size": "sm", "wrap": True},
                     {"type": "text", "text": "2️⃣ 設定出發時間", "size": "sm"},
                     {"type": "text", "text": "3️⃣ 選擇起點與終點", "size": "sm"},
                     {"type": "text", "text": "4️⃣ 填寫細節後發布，系統自動媒合", "size": "sm", "wrap": True}
@@ -595,7 +611,7 @@ def get_welcome_flex():
             ]
         }
     }
-    return FlexSendMessage(alt_text="歡迎使用 RideMatch 順路媒合！", contents=bubble)
+    return FlexSendMessage(alt_text="歡迎使用 sun car 順咖媒合！", contents=bubble)
 
 # --- 媒合規則 Flex 卡片（Item 4）---
 def get_rules_flex():
@@ -603,8 +619,11 @@ def get_rules_flex():
         "type": "bubble",
         "header": {
             "type": "box", "layout": "vertical",
-            "backgroundColor": "#555555",
-            "contents": [{"type": "text", "text": "⚖️ 媒合規則說明", "weight": "bold", "color": "#FFFFFF", "size": "md"}]
+            "backgroundColor": "#444441",
+            "contents": [
+                {"type": "text", "text": "sun car 順咖媒合", "weight": "bold", "color": "#FFFFFF", "size": "sm"},
+                {"type": "text", "text": "📋 媒合規則說明", "weight": "bold", "color": "#FFFFFFCC", "size": "md", "margin": "xs"}
+            ]
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "lg",
@@ -616,17 +635,27 @@ def get_rules_flex():
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "⏰ 時間彈性", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "你選 14:00 出發＋願意彈性 → 系統自動幫你搜尋 10:00~18:00 的行程（前後各 4 小時）。選精確時間則只搜前後 1 小時。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "選 14:00 出發＋願意彈性 → 系統搜尋 10:00~18:00（前後各 4 小時）。選精確時間則只搜前後 1 小時。", "size": "xs", "color": "#666666", "wrap": True}
                 ]},
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "🧭 方向匹配", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "只配同方向！北→南不會配到南→北的人。同縣市內則配同區域的行程。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "只配同方向！北→南不會配到南→北。同縣市內依區域分群配對（如台北東區只配東區附近）。", "size": "xs", "color": "#666666", "wrap": True}
+                ]},
+                {"type": "separator"},
+                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
+                    {"type": "text", "text": "📦 帶貨/寄物", "weight": "bold", "size": "sm"},
+                    {"type": "text", "text": "發布「載客/貨」行程時可接受順路帶貨委託。費用和物品條件由雙方自行協議，請勿運送違禁品。", "size": "xs", "color": "#666666", "wrap": True}
                 ]},
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "🔔 自動通知＆過期", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "有人發布同向行程時，系統主動推播通知雙方。行程超過 24 小時自動隱藏。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "有人發布同向行程，系統主動推播通知雙方。行程依設定天數自動下架（最長 7 天）。", "size": "xs", "color": "#666666", "wrap": True}
+                ]},
+                {"type": "separator"},
+                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
+                    {"type": "text", "text": "⭐ 評分系統", "weight": "bold", "size": "sm"},
+                    {"type": "text", "text": "行程完成後，配對雙方可互相評分（1~5 顆星）。評分顯示在對方的行程卡片上供其他人參考。", "size": "xs", "color": "#666666", "wrap": True}
                 ]}
             ]
         },
@@ -685,6 +714,17 @@ def do_publish(uid, reply_token):
     lid = lid or ''
     expire_days = int(exp) if exp else 3
     expires_at = (datetime.now() + timedelta(days=expire_days)).strftime("%Y-%m-%dT%H:%M")
+
+    # 發行程數量上限（最多 3 筆 active）
+    active_count = conn.execute(q(
+        "SELECT COUNT(*) FROM matches WHERE user_id = ? AND status = 'active'"
+    ), (uid,)).fetchone()[0]
+    if active_count >= 3:
+        safe_reply(reply_token, TextSendMessage(
+            text="⚠️ 你目前已有 3 筆生效中的行程，請先刪除舊行程後再發布新行程。\n\n輸入「我的行程」可管理現有行程。"
+        ))
+        conn.close()
+        return
 
     # 防重複發布
     existing = conn.execute(q(
@@ -950,6 +990,8 @@ def handle_postback(event):
     data = event.postback.data
     if not data:
         return
+    if is_blocked(uid):
+        return
 
     try:
         if data == "action=agree_terms":
@@ -962,7 +1004,7 @@ def handle_postback(event):
             conn.commit()
             conn.close()
             safe_reply(event.reply_token, [
-                TextSendMessage(text="✅ 感謝同意使用條款！歡迎使用 RideMatch 🎉"),
+                TextSendMessage(text="✅ 感謝同意使用條款！歡迎使用 sun car 順咖媒合 🎉"),
                 get_welcome_flex()
             ])
             return
@@ -1072,6 +1114,16 @@ def handle_postback(event):
             conn.close()
             safe_reply(event.reply_token, TextSendMessage(text=f"🚫 行程已取消 (編號: {match_id})"))
 
+        elif data.startswith("action=report"):
+            params = dict(parse_qsl(data))
+            target_uid = params.get('uid', '')
+            trip_id = params.get('trip_id', '')
+            if ADMIN_LINE_ID and target_uid:
+                safe_push(ADMIN_LINE_ID, TextSendMessage(
+                    text=f"🚨 檢舉通報\n被檢舉用戶：{target_uid}\n行程編號：{trip_id}\n檢舉者：{uid}\n\n如需封鎖請回覆：/ban {target_uid}"
+                ))
+            safe_reply(event.reply_token, TextSendMessage(text="✅ 已送出檢舉，我們會盡快處理。感謝你的回報！"))
+
         elif data.startswith("action=edit_line_id"):
             params = dict(parse_qsl(data))
             match_id = params.get('id')
@@ -1137,6 +1189,9 @@ def handle_postback(event):
 def handle_message(event):
     msg = event.message.text
     uid = event.source.user_id
+
+    if is_blocked(uid):
+        return
 
     # --- 免責同意 gate ---
     if msg not in ["免責聲明", "使用條款"]:
@@ -1406,7 +1461,12 @@ def handle_message(event):
                         {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
                 ]},
-                "footer": {"type": "box", "layout": "vertical", "contents": [contact_btn]}
+                "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                    contact_btn,
+                    {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
+                     "action": {"type": "postback", "label": "🚨 檢舉此用戶",
+                                "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
+                ]}
             })
         # 累加瀏覽次數
         trip_ids = [r[0] for r in rows]
@@ -1421,6 +1481,28 @@ def handle_message(event):
         ))
         return
 
+
+    # --- 管理員指令 ---
+    elif msg.startswith("/ban ") and uid == ADMIN_LINE_ID:
+        target = msg[5:].strip()
+        conn = get_db()
+        if USE_PG:
+            conn.execute(q("INSERT INTO blocked_users (user_id, reason) VALUES (?, 'admin_ban') ON CONFLICT (user_id) DO NOTHING"), (target,))
+        else:
+            conn.execute("INSERT OR IGNORE INTO blocked_users (user_id, reason) VALUES (?, 'admin_ban')", (target,))
+        conn.commit()
+        conn.close()
+        safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已封鎖用戶：{target}"))
+        return
+
+    elif msg.startswith("/unban ") and uid == ADMIN_LINE_ID:
+        target = msg[7:].strip()
+        conn = get_db()
+        conn.execute(q("DELETE FROM blocked_users WHERE user_id = ?"), (target,))
+        conn.commit()
+        conn.close()
+        safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已解封用戶：{target}"))
+        return
 
     # --- 開始發布流程 ---
     if msg in ["我要載客/貨", "我要搭車/寄物"]:
