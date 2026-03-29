@@ -311,22 +311,55 @@ def get_publish_confirm_flex(res_data, match_id):
     }
     return FlexSendMessage(alt_text="行程發布成功", contents=bubble)
 
-def get_main_cat_menu(text_prefix=""):
-    items = [
-        QuickReplyButton(action=MessageAction(label="禁菸禁檳榔", text="規範:全程禁菸禁檳榔")),
-        QuickReplyButton(action=MessageAction(label="謝絕寵物", text="規範:謝絕寵物")),
-        QuickReplyButton(action=MessageAction(label="禁止飲食", text="規範:禁止飲食")),
-        QuickReplyButton(action=MessageAction(label="歡迎聊天", text="規範:歡迎聊天")),
-        QuickReplyButton(action=MessageAction(label="安靜為主", text="規範:安靜為主")),
-        QuickReplyButton(action=MessageAction(label="行李請告知", text="規範:大型行李請告知")),
-        QuickReplyButton(action=MessageAction(label="順路為主", text="規範:順路為主")),
-        QuickReplyButton(action=MessageAction(label="更多選項", text="類別:更多")),
-        QuickReplyButton(action=MessageAction(label="🚀 直接發布", text="最終確認發布"))
-    ]
-    return TextSendMessage(
-        text=f"{text_prefix}特殊需求（選填，可直接發布）：",
-        quick_reply=QuickReply(items=items)
-    )
+def get_main_cat_menu():
+    bubble = {
+        "type": "bubble",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "contents": [{"type": "text", "text": "特殊需求（選填，可直接發布）",
+                          "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+            "backgroundColor": "#444441"
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "車內規定", "size": "sm", "color": "#888780"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "禁菸禁檳榔", "text": "規範:全程禁菸禁檳榔"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "禁止飲食", "text": "規範:禁止飲食"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "謝絕寵物", "text": "規範:謝絕寵物"}}
+                ]},
+                {"type": "separator"},
+                {"type": "text", "text": "乘車風格", "size": "sm", "color": "#888780"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "歡迎聊天", "text": "規範:歡迎聊天"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "安靜為主", "text": "規範:安靜為主"}}
+                ]},
+                {"type": "separator"},
+                {"type": "text", "text": "路線與行李", "size": "sm", "color": "#888780"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "順路為主", "text": "規範:順路為主"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "行李請告知", "text": "規範:大型行李請告知"}}
+                ]},
+                {"type": "separator"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "更多選項 ›", "text": "類別:更多"}},
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
+                     "color": "#1D9E75",
+                     "action": {"type": "message", "label": "🚀 直接發布", "text": "最終確認發布"}}
+                ]}
+            ]
+        }
+    }
+    return FlexSendMessage(alt_text="設定特殊需求", contents=bubble)
 
 def get_area_carousel(title="請選擇區域"):
     return TemplateSendMessage(alt_text=title, template=CarouselTemplate(columns=[
@@ -903,7 +936,7 @@ def handle_message(event):
         elif not wy or not pc or not fe or not fx:
             safe_reply(event.reply_token, get_detail_flex())
         else:
-            safe_reply(event.reply_token, get_main_cat_menu("您已填完基本資料，請選擇標籤或直接發布。"))
+            safe_reply(event.reply_token, get_main_cat_menu())
         return
 
     elif msg == "找行程":
@@ -1073,7 +1106,7 @@ def handle_message(event):
                 ])
             ))
         else:
-            safe_reply(event.reply_token, get_main_cat_menu("最後一步：自定義規範（可直接跳過發布）"))
+            safe_reply(event.reply_token, get_main_cat_menu())
 
     elif msg.startswith("類別:"):
         cat = msg.split(":")[1]
@@ -1188,7 +1221,10 @@ def handle_message(event):
         conn.execute(q('UPDATE user_state SET temp_prefs = ? WHERE user_id = ?'), (p_str, uid))
         conn.commit()
         conn.close()
-        safe_reply(event.reply_token, get_main_cat_menu(f"✅ 已選：{p}\n目前標籤：{p_str}"))
+        safe_reply(event.reply_token, [
+            TextSendMessage(text=f"✅ 已加：{p}\n目前標籤：{p_str.rstrip(', ')}"),
+            get_main_cat_menu()
+        ])
 
     elif msg == "最終確認發布":
         conn = get_db()
