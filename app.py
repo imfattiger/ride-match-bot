@@ -373,7 +373,9 @@ def get_detail_flex():
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "議價", "text": "費用:私訊議價"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "飲料", "text": "費用:請喝飲料"}},
+                     "action": {"type": "message", "label": "飲料", "text": "費用:請喝飲料"}}
+                ]},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "公益", "text": "費用:免費公益"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
@@ -557,8 +559,8 @@ def do_publish(uid, reply_token):
                 contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                     "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{m_line_id}"}}
             else:
-                contact_btn = {"type": "button", "style": "secondary", "height": "sm",
-                    "action": {"type": "message", "label": "對方未提供 LINE ID", "text": "幫助"}}
+                contact_btn = {"type": "button", "style": "secondary", "height": "sm", "color": "#888888",
+                    "action": {"type": "postback", "label": "📨 通知對方留聯絡方式", "data": f"action=contact_req&to={m[0]}&route={m[2]}{m[3]}→{m[4]}{m[5]}"}}
             match_bubbles.append({
                 "type": "bubble",
                 "header": {"type": "box", "layout": "vertical",
@@ -799,6 +801,20 @@ def handle_postback(event):
             safe_reply(event.reply_token, TextSendMessage(
                 text=f"💬 對方的 LINE ID：{line_id}\n\n點此加好友：https://line.me/ti/p/~{line_id}"
             ))
+
+        elif data.startswith("action=contact_req"):
+            params = dict(parse_qsl(data))
+            target_uid = params.get('to', '')
+            route = params.get('route', '（未知路線）')
+            if target_uid:
+                safe_push(target_uid, TextSendMessage(
+                    text=f"👋 有人對你的行程感興趣！\n\n路線：{route}\n\n對方希望與你聯絡，若方便請回覆你的 LINE ID 給機器人，下次發布行程時填入，對方就能直接加你！",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="我要發布行程", text="我要載客/貨")),
+                        QuickReplyButton(action=MessageAction(label="我要搭車", text="我要搭車/寄物"))
+                    ])
+                ))
+            safe_reply(event.reply_token, TextSendMessage(text="✅ 已通知對方留下聯絡方式，若對方有填 LINE ID 下次就能直接聯絡！"))
     except Exception as e:
         logging.error(f"Postback error for {uid}: {e}")
         safe_reply(event.reply_token, TextSendMessage(text="⚠️ 操作發生錯誤，請重新嘗試。"))
@@ -1171,18 +1187,33 @@ def handle_message(event):
             ))
             return
 
-        # 尚未填寫 LINE ID → 提示輸入
+        # 尚未填寫 LINE ID → 提示輸入（優先用上次記住的 ID）
         if lid is None:
             conn = get_db()
             conn.execute(q('UPDATE user_state SET step = ? WHERE user_id = ?'), ('WAIT_LINE_ID', uid))
             conn.commit()
+            # 查詢用戶上次發布過的 LINE ID
+            prev = conn.execute(q(
+                "SELECT line_id FROM matches WHERE user_id = ? AND line_id != '' ORDER BY created_at DESC LIMIT 1"
+            ), (uid,)).fetchone()
             conn.close()
-            safe_reply(event.reply_token, TextSendMessage(
-                text="📱 最後一步！請輸入您的 LINE ID，讓配對對象能聯絡您：\n\n💡 查看方式：LINE → 設定 → 個人檔案 → LINE ID\n\n如不想提供，請按「跳過」",
-                quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
-                ])
-            ))
+            if prev and prev[0]:
+                saved_id = prev[0]
+                safe_reply(event.reply_token, TextSendMessage(
+                    text=f"📱 聯絡方式設定\n\n上次使用的 LINE ID：@{saved_id}\n\n直接沿用還是重新輸入？",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label=f"沿用 @{saved_id[:10]}", text=saved_id)),
+                        QuickReplyButton(action=MessageAction(label="重新輸入", text="重新輸入LINE ID")),
+                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
+                    ])
+                ))
+            else:
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="📱 最後一步！輸入 LINE ID 讓配對對象能聯絡你：\n\n查看方式：LINE → 設定 → 個人檔案 → LINE ID\n（不想提供請按跳過）",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
+                    ])
+                ))
             return
 
         do_publish(uid, event.reply_token)
@@ -1199,6 +1230,14 @@ def handle_message(event):
 
         # 處理 LINE ID 輸入
         if res and res[0] == 'WAIT_LINE_ID':
+            if msg == '重新輸入LINE ID':
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="請輸入你的 LINE ID（不含 @）：",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
+                    ])
+                ))
+                return
             line_id = '' if msg == '跳過' else msg.strip().lstrip('@')
             conn = get_db()
             conn.execute(q('UPDATE user_state SET temp_line_id = ?, step = ? WHERE user_id = ?'), (line_id, 'DONE', uid))
