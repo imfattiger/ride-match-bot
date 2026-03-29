@@ -351,11 +351,9 @@ def get_detail_flex():
                 {"type": "text", "text": "中途上下車", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "✅ 接受", "text": "中途:接受"}},
+                     "action": {"type": "message", "label": "接受中途", "text": "中途:接受"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "❌ 僅起迄", "text": "中途:僅限起迄"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "🛣️ 交流道", "text": "中途:限交流道"}}
+                     "action": {"type": "message", "label": "僅起迄點", "text": "中途:僅限起迄"}}
                 ]},
                 {"type": "separator"},
                 {"type": "text", "text": "人數", "size": "sm", "color": "#888780"},
@@ -373,23 +371,14 @@ def get_detail_flex():
                 {"type": "text", "text": "費用方式", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "議價", "text": "費用:私訊議價"}},
+                     "action": {"type": "message", "label": "私訊議價", "text": "費用:私訊議價"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "飲料", "text": "費用:請喝飲料"}},
+                     "action": {"type": "message", "label": "請喝飲料", "text": "費用:請喝飲料"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "公益", "text": "費用:免費公益"}}
+                     "action": {"type": "message", "label": "免費公益", "text": "費用:免費公益"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "時間彈性（選完自動進入下一步）", "size": "sm", "color": "#888780"},
-                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
-                     "color": "#1D9E75",
-                     "action": {"type": "message", "label": "彈性 ±4hr", "text": "彈性:願意彈性"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "精確時間", "text": "彈性:不願意"}}
-                ]},
-                {"type": "separator"},
-                {"type": "text", "text": "行程有效天數（預設3天）", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "有效天數（預設3天，可跳過）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "1天", "text": "有效:1"}},
@@ -397,6 +386,15 @@ def get_detail_flex():
                      "action": {"type": "message", "label": "3天", "text": "有效:3"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "7天", "text": "有效:7"}}
+                ]},
+                {"type": "separator"},
+                {"type": "text", "text": "時間彈性（點此進入下一步 ↓）", "size": "sm", "color": "#1D9E75", "weight": "bold"},
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
+                     "color": "#1D9E75",
+                     "action": {"type": "message", "label": "彈性 ±4hr", "text": "彈性:願意彈性"}},
+                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                     "action": {"type": "message", "label": "精確時間", "text": "彈性:不願意"}}
                 ]}
             ]
         }
