@@ -189,7 +189,8 @@ def init_db():
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'",
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS expires_at TEXT",
             "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_line_id TEXT",
-            "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_expire TEXT"
+            "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_expire TEXT",
+            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0"
         ]:
             try: c.execute(stmt)
             except: pass
@@ -197,7 +198,7 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT"]:
+        for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT", "view_count INTEGER DEFAULT 0"]:
             try: c.execute(f'ALTER TABLE matches ADD COLUMN {col}')
             except: pass
         try: c.execute('ALTER TABLE user_state ADD COLUMN temp_line_id TEXT')
@@ -678,7 +679,20 @@ def do_publish(uid, reply_token):
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
             contents={"type": "carousel", "contents": match_bubbles}))
     else:
-        output.append(TextSendMessage(text="🔎 目前暫無同向行程，系統將持續監控。"))
+        # 查附近同方向的行程數，給使用者有感的等待資訊
+        try:
+            nc = get_db()
+            nearby = nc.execute(q(
+                "SELECT COUNT(*) FROM matches WHERE status = 'active' AND user_type = ? AND (s_city = ? OR e_city = ? OR s_city = ? OR e_city = ?)"
+            ), (('seeker' if ut == 'driver' else 'driver'), sc, sc, ec, ec)).fetchone()[0]
+            nc.close()
+            if nearby > 0:
+                hint = f"🔍 目前 {sc}→{ec} 方向有 {nearby} 筆潛在行程，系統正持續比對，有配對立即通知你！"
+            else:
+                hint = f"📭 目前此方向暫無行程，你的行程已發布，有人發布同向行程時會自動推播通知！"
+        except:
+            hint = "🔎 行程已發布，有人發布同向行程時會自動通知。"
+        output.append(TextSendMessage(text=hint))
 
     safe_reply(reply_token, output)
 
@@ -883,6 +897,26 @@ def handle_postback(event):
             conn.close()
             safe_reply(event.reply_token, TextSendMessage(text=f"🚫 行程已取消 (編號: {match_id})"))
 
+        elif data.startswith("action=edit_line_id"):
+            params = dict(parse_qsl(data))
+            match_id = params.get('id')
+            conn = get_db()
+            if USE_PG:
+                conn.execute(q('''INSERT INTO user_state (user_id, step)
+                    VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
+                    (uid, f'EDIT_LINE_ID:{match_id}'))
+            else:
+                conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)',
+                    (uid, f'EDIT_LINE_ID:{match_id}'))
+            conn.commit()
+            conn.close()
+            safe_reply(event.reply_token, TextSendMessage(
+                text="請輸入新的 LINE ID（輸入後直接送出，不需加 @）：",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="清除LINE ID", text="清除LINE ID"))
+                ])
+            ))
+
         elif data.startswith("contact_line="):
             line_id = data.split("=")[1]
             safe_reply(event.reply_token, TextSendMessage(
@@ -934,7 +968,7 @@ def handle_message(event):
         conn = get_db()
         now = datetime.now().strftime("%Y-%m-%dT%H:%M")
         my_matches = conn.execute(
-            q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type FROM matches WHERE user_id = ? AND status = 'active' AND time_info >= ? ORDER BY time_info ASC LIMIT 10"),
+            q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count FROM matches WHERE user_id = ? AND status = 'active' AND time_info >= ? ORDER BY time_info ASC LIMIT 10"),
             (uid, now)
         ).fetchall()
         conn.close()
@@ -942,25 +976,50 @@ def handle_message(event):
         if not my_matches:
             safe_reply(event.reply_token, TextSendMessage(text="📭 您目前沒有生效中的行程。"))
         else:
-            cols = []
+            bubbles = []
             for m in my_matches:
-                m_id, t_info, sc, sd, ec, ed, utype = m
+                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc = m
                 role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
-                title_str = f"{role} | {t_info[5:16]}"
-                text_str = f"{sc}{sd} ➔ {ec}{ed}"
-                cols.append(CarouselColumn(
-                    title=title_str[:40],
-                    text=text_str[:60],
-                    actions=[
-                        PostbackAction(label='✅ 已搭乘完成', data=f"action=complete&id={m_id}"),
-                        PostbackAction(label='🚫 取消行程', data=f"action=cancel&id={m_id}"),
-                        PostbackAction(label='❌ 刪除', data=f"action=delete&id={m_id}")
-                    ]
-                ))
-            safe_reply(event.reply_token, [
-                TextSendMessage(text="📋 以下是您的近期行程："),
-                TemplateSendMessage(alt_text="行程管理", template=CarouselTemplate(columns=cols))
-            ])
+                hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
+                lid_text = f"@{lid}" if lid else "未設定"
+                vc_text = f"{vc or 0} 次"
+                bubbles.append({
+                    "type": "bubble",
+                    "header": {"type": "box", "layout": "vertical",
+                        "contents": [{"type": "text", "text": role, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+                        "backgroundColor": hdr_color},
+                    "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                            {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                            {"type": "text", "text": t_info[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                            {"type": "text", "text": fee or "未設定", "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "LINE ID", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                            {"type": "text", "text": lid_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "瀏覽", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                            {"type": "text", "text": vc_text, "color": "#888888", "size": "sm", "flex": 4}]},
+                    ]},
+                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                        {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                         "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
+                        {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                             "action": {"type": "postback", "label": "✏️ 更新LINE ID", "data": f"action=edit_line_id&id={m_id}"}},
+                            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                             "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
+                        ]}
+                    ]}
+                })
+            safe_reply(event.reply_token, FlexSendMessage(
+                alt_text="我的行程",
+                contents={"type": "carousel", "contents": bubbles}
+            ))
         return
 
     # --- 媒合規則（Item 4）---
@@ -1098,6 +1157,12 @@ def handle_message(event):
                 ]},
                 "footer": {"type": "box", "layout": "vertical", "contents": [contact_btn]}
             })
+        # 累加瀏覽次數
+        trip_ids = [r[0] for r in rows]
+        if trip_ids:
+            placeholders = ','.join(['?' if not USE_PG else '%s'] * len(trip_ids))
+            conn.execute(f"UPDATE matches SET view_count = view_count + 1 WHERE id IN ({placeholders})", trip_ids)
+            conn.commit()
         conn.close()
         safe_reply(event.reply_token, FlexSendMessage(
             alt_text=f"{city} 附近行程",
@@ -1302,6 +1367,24 @@ def handle_message(event):
         except Exception as e:
             _store_log("fallback_db_error", str(e))
             res = None
+
+        # 處理編輯行程 LINE ID
+        if res and res[0] and res[0].startswith('EDIT_LINE_ID:'):
+            match_id = res[0].split(':', 1)[1]
+            new_lid = '' if msg == '清除LINE ID' else msg.strip().lstrip('@')
+            conn2 = get_db()
+            conn2.execute(q('UPDATE matches SET line_id = ? WHERE id = ? AND user_id = ?'), (new_lid, match_id, uid))
+            conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+            conn2.commit()
+            conn2.close()
+            result = f"已清除 LINE ID" if not new_lid else f"LINE ID 已更新為 @{new_lid}"
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"✅ {result}",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="📋 我的行程", text="我的行程"))
+                ])
+            ))
+            return
 
         # 處理回傳 LINE ID 給詢問者
         if res and res[0] and res[0].startswith('SHARE_LINE_ID:'):
