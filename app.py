@@ -1027,6 +1027,10 @@ def handle_message(event):
         safe_reply(event.reply_token, get_rules_flex())
         return
 
+    elif msg in ["myid", "/myid", "我的id", "我的ID"]:
+        safe_reply(event.reply_token, TextSendMessage(text=f"你的 LINE User ID：\n{uid}"))
+        return
+
     # --- 幫助 / 使用說明（Item 3）---
     elif msg in ["回報問題", "建議", "意見回饋", "回饋", "feedback"]:
         conn = get_db()
