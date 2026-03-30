@@ -198,6 +198,9 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (
             user_id TEXT PRIMARY KEY, reason TEXT,
             blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS push_log (
+            id SERIAL PRIMARY KEY, month_key TEXT,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         # 遷移既有資料表
         for stmt in [
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS line_id TEXT DEFAULT ''",
@@ -211,7 +214,9 @@ def init_db():
             "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS ratee_id TEXT",
             "CREATE UNIQUE INDEX IF NOT EXISTS ratings_rater_match ON ratings(match_id, rater_id)",
             "CREATE TABLE IF NOT EXISTS pairs (id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            "CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE IF NOT EXISTS push_log (id SERIAL PRIMARY KEY, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS reminded_at TEXT"
         ]:
             try: c.execute(stmt)
             except: pass
@@ -221,6 +226,9 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, rater_id TEXT, ratee_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS push_log (id INTEGER PRIMARY KEY AUTOINCREMENT, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        try: c.execute('ALTER TABLE matches ADD COLUMN reminded_at TEXT')
+        except: pass
         for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT", "view_count INTEGER DEFAULT 0"]:
             try: c.execute(f'ALTER TABLE matches ADD COLUMN {col}')
             except: pass
@@ -299,6 +307,14 @@ def safe_push(user_id, messages):
     try:
         line_bot_api.push_message(user_id, messages)
         _store_log("push_ok", f"uid={user_id[:10]}...")
+        try:
+            month_key = datetime.now().strftime("%Y-%m")
+            _lc = get_db()
+            _lc.execute(q("INSERT INTO push_log (month_key) VALUES (?)"), (month_key,))
+            _lc.commit()
+            _lc.close()
+        except:
+            pass
     except Exception as e:
         logging.error(f"Push to {user_id} failed: {e}")
         _store_log("push_fail", str(e))
@@ -308,7 +324,8 @@ def get_publish_confirm_flex(res_data, match_id):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res_data
     main_color = "#00b900" if ut == 'driver' else "#1e90ff"
     ps_text = ps.strip().rstrip(",") if ps else "（未選）"
-    share_text = f"🚗 共乘徵求！\n{sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人 | {fe}\n\n找順路旅伴就用 sun car 順咖媒合"
+    role_label = "載客/貨" if ut == "driver" else "搭車/寄物"
+    share_text = f"【sun car 順咖媒合】{role_label}徵求 🚗\n\n📍 {sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人・費用：{fe}\n\n有要同方向的嗎？加 LINE Bot「sun car 順咖媒合」一起揪行程！"
     share_url = f"https://line.me/R/msg/text/?{quote(share_text)}"
 
     bubble = {
@@ -1391,15 +1408,15 @@ def handle_message(event):
             "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
-                     "action": {"type": "message", "label": "北部", "text": f"找地區:{ftype}:北部"}},
+                     "action": {"type": "message", "label": "北部", "text": f"找地區:{ftype}:all:北部"}},
                     {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
-                     "action": {"type": "message", "label": "中部", "text": f"找地區:{ftype}:中部"}}
+                     "action": {"type": "message", "label": "中部", "text": f"找地區:{ftype}:all:中部"}}
                 ]},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
-                     "action": {"type": "message", "label": "南部", "text": f"找地區:{ftype}:南部"}},
+                     "action": {"type": "message", "label": "南部", "text": f"找地區:{ftype}:all:南部"}},
                     {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#E07B00",
-                     "action": {"type": "message", "label": "東部", "text": f"找地區:{ftype}:東部"}}
+                     "action": {"type": "message", "label": "東部", "text": f"找地區:{ftype}:all:東部"}}
                 ]}
             ]}
         }
@@ -1408,8 +1425,12 @@ def handle_message(event):
 
     elif msg.startswith("找地區:"):
         parts = msg.split(":")
-        ftype = parts[1] if len(parts) == 3 else "all"
-        area = parts[2] if len(parts) == 3 else parts[1]
+        if len(parts) == 4:
+            ftype, tfilter, area = parts[1], parts[2], parts[3]
+        elif len(parts) == 3:
+            ftype, area, tfilter = parts[1], parts[2], "all"
+        else:
+            ftype, area, tfilter = "all", parts[1], "all"
         cities = CITY_DATA.get(area, [])
         rows = []
         for i in range(0, len(cities), 2):
@@ -1417,11 +1438,11 @@ def handle_message(event):
             if len(pair) == 2:
                 rows.append({"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
-                     "action": {"type": "message", "label": c, "text": f"找縣市:{ftype}:{c}"}} for c in pair
+                     "action": {"type": "message", "label": c, "text": f"找縣市:{ftype}:{tfilter}:{c}"}} for c in pair
                 ]})
             else:
                 rows.append({"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
-                    "action": {"type": "message", "label": pair[0], "text": f"找縣市:{ftype}:{pair[0]}"}})
+                    "action": {"type": "message", "label": pair[0], "text": f"找縣市:{ftype}:{tfilter}:{pair[0]}"}})
         bubble = {
             "type": "bubble",
             "header": {"type": "box", "layout": "vertical", "backgroundColor": "#444441",
@@ -1433,27 +1454,51 @@ def handle_message(event):
 
     elif msg.startswith("找縣市:"):
         parts = msg.split(":")
-        ftype = parts[1] if len(parts) == 3 else "all"
-        city = parts[2] if len(parts) == 3 else parts[1]
+        if len(parts) == 4:
+            ftype, tfilter, city = parts[1], parts[2], parts[3]
+        elif len(parts) == 3:
+            ftype, city, tfilter = parts[1], parts[2], "all"
+        else:
+            ftype, city, tfilter = "all", parts[1], "all"
+
+        now_str = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT00:00")
+        week_str = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%dT00:00")
+        if tfilter == "today":
+            time_cond = " AND time_info >= ? AND time_info < ?"
+            time_vals = [now_str, tomorrow_str]
+        elif tfilter == "week":
+            time_cond = " AND time_info >= ? AND time_info < ?"
+            time_vals = [now_str, week_str]
+        else:
+            time_cond = ""
+            time_vals = []
+
         conn = get_db()
+        base_cond = f"status = 'active' AND (s_city = ? OR e_city = ?){time_cond}"
         if ftype == "all":
             rows = conn.execute(q(
-                "SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE status = 'active' AND (s_city = ? OR e_city = ?) ORDER BY time_info LIMIT 10"
-            ), (city, city)).fetchall()
+                f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE {base_cond} ORDER BY time_info LIMIT 10"
+            ), [city, city] + time_vals).fetchall()
         else:
             rows = conn.execute(q(
-                "SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE status = 'active' AND user_type = ? AND (s_city = ? OR e_city = ?) ORDER BY time_info LIMIT 10"
-            ), (ftype, city, city)).fetchall()
+                f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE user_type = ? AND {base_cond} ORDER BY time_info LIMIT 10"
+            ), [ftype, city, city] + time_vals).fetchall()
+
+        filter_labels = {"today": ("📌今天", "本週", "全部"), "week": ("今天", "📌本週", "全部")}.get(tfilter, ("今天", "本週", "📌全部"))
+        filter_qr = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[1], text=f"找縣市:{ftype}:week:{city}")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}"))
+        ])
 
         if not rows:
             conn.close()
             label = {"driver": "司機", "seeker": "乘客"}.get(ftype, "")
+            time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "")
             safe_reply(event.reply_token, TextSendMessage(
-                text=f"📭 目前 {city} 方向暫無{label}行程。\n你可以發布行程讓別人找到你！",
-                quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🚗 我要載客/貨", text="我要載客/貨")),
-                    QuickReplyButton(action=MessageAction(label="🙋 我要搭車/寄物", text="我要搭車/寄物"))
-                ])
+                text=f"📭 目前 {city} {time_hint}暫無{label}行程。\n換個時間範圍試試，或發布行程讓別人找到你！",
+                quick_reply=filter_qr
             ))
             return
 
@@ -1465,41 +1510,59 @@ def handle_message(event):
             icon = "🚗" if utype == 'driver' else "🙋"
             role = "司機" if utype == 'driver' else "乘客"
             hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
-            if lid:
-                contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
-                    "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}}
+            is_own = (owner_uid == uid)
+            if is_own:
+                footer_contents = [
+                    {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                     "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={trip_id}"}},
+                    {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                        {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                         "action": {"type": "postback", "label": "✏️ LINE ID", "data": f"action=edit_line_id&id={trip_id}"}},
+                        {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                         "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={trip_id}"}}
+                    ]}
+                ]
+            elif lid:
+                footer_contents = [
+                    {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                     "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}},
+                    {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
+                     "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
+                ]
             else:
-                contact_btn = {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
-                    "action": {"type": "postback", "label": "📨 通知對方留聯絡方式",
-                               "data": f"action=contact_req&to={owner_uid}&route={sc}{sd}→{ec}{ed}"}}
+                footer_contents = [
+                    {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
+                     "action": {"type": "postback", "label": "📨 通知對方留聯絡方式",
+                                "data": f"action=contact_req&to={owner_uid}&route={sc}{sd}→{ec}{ed}"}},
+                    {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
+                     "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
+                ]
+            body_rows = [
+                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                    {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                    {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                    {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                    {"type": "text", "text": tinfo[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                    {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                    {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 4}]},
+                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                    {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                    {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
+                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                    {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                    {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]}
+            ]
+            if is_own:
+                body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#aaaaaa", "align": "end"})
             bubbles.append({
                 "type": "bubble",
                 "header": {"type": "box", "layout": "vertical",
                     "contents": [{"type": "text", "text": f"{icon} {role}", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
                     "backgroundColor": hdr_color},
-                "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": tinfo[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
-                ]},
-                "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                    contact_btn,
-                    {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
-                     "action": {"type": "postback", "label": "🚨 檢舉此用戶",
-                                "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
-                ]}
+                "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_rows},
+                "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": footer_contents}
             })
         # 累加瀏覽次數
         trip_ids = [r[0] for r in rows]
@@ -1508,14 +1571,25 @@ def handle_message(event):
             conn.execute(f"UPDATE matches SET view_count = view_count + 1 WHERE id IN ({placeholders})", trip_ids)
             conn.commit()
         conn.close()
-        safe_reply(event.reply_token, FlexSendMessage(
-            alt_text=f"{city} 附近行程",
-            contents={"type": "carousel", "contents": bubbles}
-        ))
+        time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "全部")
+        safe_reply(event.reply_token, [
+            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{len(rows)} 筆）", quick_reply=filter_qr),
+            FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles})
+        ])
         return
 
 
     # --- 管理員指令 ---
+    elif msg == "/quota" and uid == ADMIN_LINE_ID:
+        month_key = datetime.now().strftime("%Y-%m")
+        conn = get_db()
+        count = conn.execute(q("SELECT COUNT(*) FROM push_log WHERE month_key = ?"), (month_key,)).fetchone()[0]
+        conn.close()
+        safe_reply(event.reply_token, TextSendMessage(
+            text=f"📊 {month_key} 推播用量：{count} / 200\n剩餘：{max(0, 200 - count)} 則"
+        ))
+        return
+
     elif msg.startswith("/ban ") and uid == ADMIN_LINE_ID:
         target = msg[5:].strip()
         conn = get_db()
@@ -1819,7 +1893,30 @@ def handle_message(event):
                 quick_reply=QuickReply(items=items)
             ))
 
-# --- 10. Keep Alive ---
+# --- 10. 到期提醒 ---
+def reminder_thread():
+    while True:
+        try:
+            now = datetime.now()
+            remind_from = now.strftime("%Y-%m-%dT%H:%M")
+            remind_to = (now + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+            conn = get_db()
+            trips = conn.execute(q(
+                "SELECT id, user_id, s_city, e_city, expires_at FROM matches WHERE status = 'active' AND expires_at BETWEEN ? AND ? AND reminded_at IS NULL"
+            ), (remind_from, remind_to)).fetchall()
+            for trip in trips:
+                trip_id, user_id, sc, ec, exp_at = trip
+                safe_push(user_id, TextSendMessage(
+                    text=f"⏰ 行程即將下架提醒\n\n{sc} ➔ {ec} 的行程將於 {exp_at[5:16]} 自動下架。\n\n若想延長，請輸入「我的行程」刪除後重新發布。"
+                ))
+                conn.execute(q("UPDATE matches SET reminded_at = ? WHERE id = ?"), (remind_from, trip_id))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logging.error(f"Reminder thread error: {e}")
+        time.sleep(1800)
+
+# --- 11. Keep Alive ---
 def keep_alive():
     url = os.getenv('RENDER_EXTERNAL_URL', 'https://ride-match-bot.onrender.com') + '/'
     while True:
@@ -1833,8 +1930,10 @@ def keep_alive():
 # Render 環境下在模組層級啟動 keep_alive（gunicorn 不會跑 __main__）
 if os.getenv('RENDER'):
     threading.Thread(target=keep_alive, daemon=True).start()
+    threading.Thread(target=reminder_thread, daemon=True).start()
 
 if __name__ == "__main__":
     threading.Thread(target=keep_alive, daemon=True).start()
+    threading.Thread(target=reminder_thread, daemon=True).start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
