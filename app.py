@@ -697,8 +697,10 @@ def get_rules_flex():
             ]
         },
         "footer": {
-            "type": "box", "layout": "vertical",
+            "type": "box", "layout": "vertical", "spacing": "sm",
             "contents": [
+                {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                 "action": {"type": "message", "label": "🔍 找所有行程", "text": "找行程"}},
                 {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "📖 回到使用說明", "text": "幫助"}}
             ]
