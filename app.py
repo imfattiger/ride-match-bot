@@ -274,9 +274,7 @@ def clean_expired_matches():
     try:
         conn = get_db()
         now = datetime.now().strftime("%Y-%m-%dT%H:%M")
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
-        # 新行程用 expires_at；舊行程（無 expires_at）維持原 24hr 邏輯
-        conn.execute(q('DELETE FROM matches WHERE (expires_at IS NOT NULL AND expires_at < ?) OR (expires_at IS NULL AND time_info < ?)'), (now, yesterday))
+        conn.execute(q("DELETE FROM matches WHERE status = 'active' AND (expires_at < ? OR time_info < ?)"), (now, now))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -1291,7 +1289,7 @@ def handle_message(event):
                          "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
                         {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                             {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                             "action": {"type": "postback", "label": "✏️ 更新LINE ID", "data": f"action=edit_line_id&id={m_id}"}},
+                             "action": {"type": "postback", "label": "✏️ 改ID", "data": f"action=edit_line_id&id={m_id}"}},
                             {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                              "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
                         ]}
@@ -1573,8 +1571,8 @@ def handle_message(event):
         conn.close()
         time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "全部")
         safe_reply(event.reply_token, [
-            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{len(rows)} 筆）", quick_reply=filter_qr),
-            FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles})
+            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{len(rows)} 筆）"),
+            FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles}, quick_reply=filter_qr)
         ])
         return
 
@@ -1582,12 +1580,18 @@ def handle_message(event):
     # --- 管理員指令 ---
     elif msg == "/quota" and uid == ADMIN_LINE_ID:
         month_key = datetime.now().strftime("%Y-%m")
-        conn = get_db()
-        count = conn.execute(q("SELECT COUNT(*) FROM push_log WHERE month_key = ?"), (month_key,)).fetchone()[0]
-        conn.close()
-        safe_reply(event.reply_token, TextSendMessage(
-            text=f"📊 {month_key} 推播用量：{count} / 200\n剩餘：{max(0, 200 - count)} 則"
-        ))
+        try:
+            resp = requests.get(
+                "https://api.line.me/v2/bot/message/quota/consumption",
+                headers={"Authorization": f"Bearer {os.getenv('LINE_CHANNEL_ACCESS_TOKEN')}"},
+                timeout=5
+            )
+            used = resp.json().get("totalUsage", 0)
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"📊 {month_key} LINE 推播用量\n已用：{used} / 200\n剩餘：{max(0, 200 - used)} 則"
+            ))
+        except Exception as e:
+            safe_reply(event.reply_token, TextSendMessage(text=f"⚠️ 無法取得 LINE 配額資訊：{e}"))
         return
 
     elif msg.startswith("/ban ") and uid == ADMIN_LINE_ID:
