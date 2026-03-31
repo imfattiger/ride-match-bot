@@ -1137,7 +1137,19 @@ def handle_postback(event):
     data = event.postback.data
     if not data:
         return
-    if is_blocked(uid):
+
+    # --- 單次 DB query 同時檢查封鎖 + 同意條款 ---
+    try:
+        _pc = get_db()
+        try:
+            _pb_state = _pc.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+            _pb_blocked = _pc.execute(q("SELECT user_id FROM blocked_users WHERE user_id = ?"), (uid,)).fetchone()
+        finally:
+            _pc.close()
+    except:
+        _pb_state, _pb_blocked = None, None
+
+    if _pb_blocked:
         return
 
     try:
@@ -1158,13 +1170,7 @@ def handle_postback(event):
             ])
             return
 
-        # --- 同意 gate for postback ---
-        conn_chk = get_db()
-        try:
-            agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
-        finally:
-            conn_chk.close()
-        if not agreed_row or not agreed_row[0]:
+        if not _pb_state or not _pb_state[0]:
             safe_reply(event.reply_token, get_terms_flex())
             return
 
@@ -1354,21 +1360,29 @@ def handle_message(event):
     msg = event.message.text
     uid = event.source.user_id
 
-    if is_blocked(uid):
+    # --- 單次 DB query 同時檢查封鎖狀態 + 同意條款（減少 round-trip）---
+    try:
+        _gc = get_db()
+        try:
+            _state = _gc.execute(q(
+                "SELECT agreed_terms FROM user_state WHERE user_id = ?"
+            ), (uid,)).fetchone()
+            _blocked = _gc.execute(q(
+                "SELECT user_id FROM blocked_users WHERE user_id = ?"
+            ), (uid,)).fetchone()
+        finally:
+            _gc.close()
+    except:
+        _state, _blocked = None, None
+
+    if _blocked:
         return
 
-    # --- 免責同意 gate ---
-    if msg not in ["免責聲明", "使用條款"]:
-        conn_chk = get_db()
-        try:
-            agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
-        finally:
-            conn_chk.close()
-        if not agreed_row or not agreed_row[0]:
-            safe_reply(event.reply_token, get_terms_flex())
-            return
-
     if msg in ["免責聲明", "使用條款"]:
+        safe_reply(event.reply_token, get_terms_flex())
+        return
+
+    if not _state or not _state[0]:
         safe_reply(event.reply_token, get_terms_flex())
         return
 
@@ -1791,7 +1805,7 @@ def handle_message(event):
 
     # --- 開始發布流程 ---
     if msg in ["我要載客/貨", "我要搭車/寄物"]:
-        clean_expired_matches()
+        threading.Thread(target=clean_expired_matches, daemon=True).start()  # 非同步，不阻塞回應
         ut = 'driver' if "載客" in msg else 'seeker'
         conn = get_db()
         try:
