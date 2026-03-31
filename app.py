@@ -1588,12 +1588,14 @@ def handle_message(event):
 
     elif msg.startswith("找縣市:"):
         parts = msg.split(":")
-        if len(parts) == 4:
-            ftype, tfilter, city = parts[1], parts[2], parts[3]
+        if len(parts) == 5:
+            ftype, tfilter, city, sort = parts[1], parts[2], parts[3], parts[4]
+        elif len(parts) == 4:
+            ftype, tfilter, city, sort = parts[1], parts[2], parts[3], "time"
         elif len(parts) == 3:
-            ftype, city, tfilter = parts[1], parts[2], "all"
+            ftype, city, tfilter, sort = parts[1], parts[2], "all", "time"
         else:
-            ftype, city, tfilter = "all", parts[1], "all"
+            ftype, city, tfilter, sort = "all", parts[1], "all", "time"
 
         now_str = datetime.now().strftime("%Y-%m-%dT%H:%M")
         tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT00:00")
@@ -1609,22 +1611,30 @@ def handle_message(event):
             time_vals = []
 
         filter_labels = {"today": ("📌今天", "本週", "全部"), "week": ("今天", "📌本週", "全部")}.get(tfilter, ("今天", "本週", "📌全部"))
+        sort_time_label = "📌 時間排序" if sort == "time" else "🕒 時間排序"
+        sort_rating_label = "📌 評分優先" if sort == "rating" else "⭐ 評分優先"
         filter_qr = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}")),
-            QuickReplyButton(action=MessageAction(label=filter_labels[1], text=f"找縣市:{ftype}:week:{city}")),
-            QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}"))
+            QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}:{sort}")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[1], text=f"找縣市:{ftype}:week:{city}:{sort}")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}:{sort}")),
+            QuickReplyButton(action=MessageAction(label=sort_time_label, text=f"找縣市:{ftype}:{tfilter}:{city}:time")),
+            QuickReplyButton(action=MessageAction(label=sort_rating_label, text=f"找縣市:{ftype}:{tfilter}:{city}:rating")),
         ])
 
         conn = get_db()
         try:
             base_cond = f"status = 'active' AND (s_city = ? OR e_city = ?){time_cond}"
+            if sort == "rating":
+                order_clause = "(SELECT COALESCE(AVG(score), 0) FROM ratings WHERE ratee_id = matches.user_id) DESC, time_info ASC"
+            else:
+                order_clause = "time_info ASC"
             if ftype == "all":
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE {base_cond} ORDER BY time_info LIMIT 10"
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE {base_cond} ORDER BY {order_clause} LIMIT 10"
                 ), [city, city] + time_vals).fetchall()
             else:
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE user_type = ? AND {base_cond} ORDER BY time_info LIMIT 10"
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE user_type = ? AND {base_cond} ORDER BY {order_clause} LIMIT 10"
                 ), [ftype, city, city] + time_vals).fetchall()
 
             if not rows:
@@ -1707,8 +1717,9 @@ def handle_message(event):
         finally:
             conn.close()
         time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "全部")
+        sort_hint = "⭐ 評分優先" if sort == "rating" else "🕒 時間排序"
         safe_reply(event.reply_token, [
-            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{len(rows)} 筆）"),
+            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{sort_hint}・{len(rows)} 筆）"),
             FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles}, quick_reply=filter_qr)
         ])
         return
