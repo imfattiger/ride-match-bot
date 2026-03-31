@@ -290,6 +290,8 @@ def is_blocked(uid):
     except:
         return False
 
+_flush_last = {}  # uid -> last flush timestamp，避免每次訊息都觸發 DB query
+
 def flush_pending_pushes(uid):
     """補送之前推播失敗的通知，成功後刪除。靜默執行，不影響主流程。"""
     try:
@@ -717,7 +719,9 @@ def get_welcome_flex():
                 {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}},
                 {"type": "button", "style": "primary", "height": "sm", "color": "#CC0000",
-                 "action": {"type": "message", "label": "⚖️ 免責聲明與使用條款", "text": "免責聲明"}}
+                 "action": {"type": "message", "label": "⚖️ 免責聲明與使用條款", "text": "免責聲明"}},
+                {"type": "button", "style": "link", "height": "sm", "color": "#aaaaaa",
+                 "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}}
             ]
         }
     }
@@ -775,7 +779,9 @@ def get_rules_flex():
                 {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                  "action": {"type": "message", "label": "🔍 找所有行程", "text": "找行程"}},
                 {"type": "button", "style": "secondary", "height": "sm",
-                 "action": {"type": "message", "label": "📖 回到使用說明", "text": "幫助"}}
+                 "action": {"type": "message", "label": "📖 回到使用說明", "text": "幫助"}},
+                {"type": "button", "style": "link", "height": "sm", "color": "#aaaaaa",
+                 "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}}
             ]
         }
     }
@@ -1366,8 +1372,10 @@ def handle_message(event):
         safe_reply(event.reply_token, get_terms_flex())
         return
 
-    # --- 補送失敗推播（靜默，每次互動自動觸發）---
-    threading.Thread(target=flush_pending_pushes, args=(uid,), daemon=True).start()
+    # --- 補送失敗推播（每用戶最多每 60 秒觸發一次，避免拖慢回應）---
+    if time.time() - _flush_last.get(uid, 0) > 60:
+        _flush_last[uid] = time.time()
+        threading.Thread(target=flush_pending_pushes, args=(uid,), daemon=True).start()
 
     # --- 有新配對嗎 ---
     if msg in ["有新配對嗎", "新配對", "配對通知"]:
