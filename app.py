@@ -217,7 +217,8 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS pairs (id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
             "CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
             "CREATE TABLE IF NOT EXISTS push_log (id SERIAL PRIMARY KEY, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS reminded_at TEXT"
+            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS reminded_at TEXT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist) WHERE status = 'active'"
         ]:
             try: c.execute(stmt)
             except: pass
@@ -229,6 +230,8 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS push_log (id INTEGER PRIMARY KEY AUTOINCREMENT, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         try: c.execute('ALTER TABLE matches ADD COLUMN reminded_at TEXT')
+        except: pass
+        try: c.execute('CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist)')
         except: pass
         for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT", "view_count INTEGER DEFAULT 0"]:
             try: c.execute(f'ALTER TABLE matches ADD COLUMN {col}')
@@ -771,23 +774,23 @@ def do_publish(uid, reply_token):
             ))
             return
 
-        # 防重複發布
-        existing = conn.execute(q(
-            "SELECT id FROM matches WHERE user_id = ? AND user_type = ? AND time_info = ? AND s_city = ? AND s_dist = ? AND e_city = ? AND e_dist = ? AND status = 'active'"
-        ), (uid, ut, tt, sc, sd, ec, ed)).fetchone()
-        if existing:
-            safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
-            return
-
+        # 防重複發布（原子性：唯一索引 + ON CONFLICT，避免競態條件）
         cursor = conn.cursor()
         if USE_PG:
-            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id'),
+            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id'),
                            (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
-            new_id = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            if row is None:
+                safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
+                return
+            new_id = row[0]
         else:
-            cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                            (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
             new_id = cursor.lastrowid
+            if not new_id:
+                safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
+                return
         conn.commit()
     finally:
         conn.close()
