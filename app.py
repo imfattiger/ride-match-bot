@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import sqlite3
 import logging
 import threading
@@ -202,6 +203,9 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS push_log (
             id SERIAL PRIMARY KEY, month_key TEXT,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS pending_pushes (
+            id SERIAL PRIMARY KEY, user_id TEXT, message_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         # 遷移既有資料表
         for stmt in [
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS line_id TEXT DEFAULT ''",
@@ -218,7 +222,8 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
             "CREATE TABLE IF NOT EXISTS push_log (id SERIAL PRIMARY KEY, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
             "ALTER TABLE matches ADD COLUMN IF NOT EXISTS reminded_at TEXT",
-            "CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist) WHERE status = 'active'"
+            "CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist) WHERE status = 'active'",
+            "CREATE TABLE IF NOT EXISTS pending_pushes (id SERIAL PRIMARY KEY, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         ]:
             try: c.execute(stmt)
             except: pass
@@ -229,6 +234,7 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS push_log (id INTEGER PRIMARY KEY AUTOINCREMENT, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS pending_pushes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         try: c.execute('ALTER TABLE matches ADD COLUMN reminded_at TEXT')
         except: pass
         try: c.execute('CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist)')
@@ -269,6 +275,34 @@ def is_blocked(uid):
         return bool(row)
     except:
         return False
+
+def flush_pending_pushes(uid):
+    """補送之前推播失敗的通知，成功後刪除。靜默執行，不影響主流程。"""
+    try:
+        conn = get_db()
+        try:
+            rows = conn.execute(q(
+                "SELECT id, message_json FROM pending_pushes WHERE user_id = ? ORDER BY id LIMIT 5"
+            ), (uid,)).fetchall()
+        finally:
+            conn.close()
+        for row_id, msg_json in rows:
+            try:
+                msgs_data = json.loads(msg_json)
+                from linebot.models import SendMessage
+                rebuilt = [FlexSendMessage.new_from_json_dict(m) if m.get('type') == 'flex' else TextSendMessage(text=m.get('text', '')) for m in msgs_data]
+                line_bot_api.push_message(uid, rebuilt)
+                # 成功則刪除
+                _dc = get_db()
+                try:
+                    _dc.execute(q("DELETE FROM pending_pushes WHERE id = ?"), (row_id,))
+                    _dc.commit()
+                finally:
+                    _dc.close()
+            except:
+                pass  # 仍然失敗就等下次
+    except:
+        pass
 
 _last_clean_ts = 0
 
@@ -326,6 +360,21 @@ def safe_push(user_id, messages):
     except Exception as e:
         logging.error(f"Push to {user_id} failed: {e}")
         _store_log("push_fail", str(e))
+        # 推播失敗補救：存入 pending_pushes，讓使用者下次互動時補送
+        try:
+            if isinstance(messages, list):
+                msgs_data = [m.as_json_dict() for m in messages]
+            else:
+                msgs_data = [messages.as_json_dict()]
+            _pc = get_db()
+            try:
+                _pc.execute(q("INSERT INTO pending_pushes (user_id, message_json) VALUES (?, ?)"),
+                            (user_id, json.dumps(msgs_data, ensure_ascii=False)))
+                _pc.commit()
+            finally:
+                _pc.close()
+        except Exception as pe:
+            logging.error(f"Failed to save pending push: {pe}")
 
 # --- 4. Flex 卡片建構 ---
 def get_publish_confirm_flex(res_data, match_id):
@@ -1288,6 +1337,23 @@ def handle_message(event):
 
     if msg in ["免責聲明", "使用條款"]:
         safe_reply(event.reply_token, get_terms_flex())
+        return
+
+    # --- 補送失敗推播（靜默，每次互動自動觸發）---
+    threading.Thread(target=flush_pending_pushes, args=(uid,), daemon=True).start()
+
+    # --- 有新配對嗎 ---
+    if msg in ["有新配對嗎", "新配對", "配對通知"]:
+        conn = get_db()
+        try:
+            cnt = conn.execute(q("SELECT COUNT(*) FROM pending_pushes WHERE user_id = ?"), (uid,)).fetchone()[0]
+        finally:
+            conn.close()
+        if cnt > 0:
+            safe_reply(event.reply_token, TextSendMessage(text=f"📬 找到 {cnt} 則待送通知，正在補送..."))
+            flush_pending_pushes(uid)
+        else:
+            safe_reply(event.reply_token, TextSendMessage(text="✅ 目前沒有未送出的配對通知。"))
         return
 
     # --- 我的行程 ---
