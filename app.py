@@ -954,7 +954,10 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     raw_res = c.fetchall()
 
     final_matches = []
-    user_p = int(p_count)
+    try:
+        user_p = int(str(p_count).strip().split()[0])
+    except:
+        user_p = 1  # 無法解析時預設 1，避免 crash 導致全部配不到
 
     for m in raw_res:
         m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id = m
@@ -978,7 +981,12 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
             if user_s_cluster != match_s_cluster or user_e_cluster != match_e_cluster:
                 continue
 
-        match_p = int(m_pc)
+        try:
+            match_p = int(str(m_pc).strip().split()[0])
+        except:
+            match_p = 1
+        # driver.user_p = 能載幾人；seeker.user_p = 需要幾個座位
+        # 配對條件：driver 能載人數 >= seeker 需要座位數
         if utype == 'driver' and user_p < match_p:
             continue
         if utype == 'seeker' and user_p > match_p:
