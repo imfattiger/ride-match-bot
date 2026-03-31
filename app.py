@@ -1176,6 +1176,14 @@ def handle_postback(event):
 
         if data == "select_time":
             t = event.postback.params['datetime']
+            if t < datetime.now().strftime("%Y-%m-%dT%H:%M"):
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ 出發時間不能是過去，請重新選擇：",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=DatetimePickerAction(label="🕒 重新選擇", data="select_time", mode="datetime"))
+                    ])
+                ))
+                return
             conn = get_db()
             try:
                 conn.execute(q('UPDATE user_state SET temp_time = ?, step = ? WHERE user_id = ?'), (t, "START", uid))
