@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 import logging
 import threading
@@ -258,8 +259,10 @@ def get_user_rating(conn, user_id):
 def is_blocked(uid):
     try:
         conn = get_db()
-        row = conn.execute(q("SELECT user_id FROM blocked_users WHERE user_id = ?"), (uid,)).fetchone()
-        conn.close()
+        try:
+            row = conn.execute(q("SELECT user_id FROM blocked_users WHERE user_id = ?"), (uid,)).fetchone()
+        finally:
+            conn.close()
         return bool(row)
     except:
         return False
@@ -273,10 +276,12 @@ def clean_expired_matches():
     _last_clean_ts = time.time()
     try:
         conn = get_db()
-        now = datetime.now().strftime("%Y-%m-%dT%H:%M")
-        conn.execute(q("DELETE FROM matches WHERE status = 'active' AND (expires_at < ? OR time_info < ?)"), (now, now))
-        conn.commit()
-        conn.close()
+        try:
+            now = datetime.now().strftime("%Y-%m-%dT%H:%M")
+            conn.execute(q("DELETE FROM matches WHERE status = 'active' AND (expires_at < ? OR time_info < ?)"), (now, now))
+            conn.commit()
+        finally:
+            conn.close()
     except Exception as e:
         logging.error(f"Clean expired failed: {e}")
 
@@ -308,9 +313,11 @@ def safe_push(user_id, messages):
         try:
             month_key = datetime.now().strftime("%Y-%m")
             _lc = get_db()
-            _lc.execute(q("INSERT INTO push_log (month_key) VALUES (?)"), (month_key,))
-            _lc.commit()
-            _lc.close()
+            try:
+                _lc.execute(q("INSERT INTO push_log (month_key) VALUES (?)"), (month_key,))
+                _lc.commit()
+            finally:
+                _lc.close()
         except:
             pass
     except Exception as e:
@@ -968,8 +975,17 @@ def health():
         pass
     return {"token": token_ok, "secret": secret_ok, "db": db_ok}
 
+def _check_admin_token():
+    """驗證請求帶有正確的 admin token（query string: ?token=xxx）"""
+    expected = os.getenv('ADMIN_SECRET', '')
+    if not expected:
+        return True  # 未設定時不驗證（開發環境）
+    return request.args.get('token') == expected
+
 @app.route("/debug-bot", methods=['GET'])
 def debug_bot():
+    if not _check_admin_token():
+        return {"error": "unauthorized"}, 401
     try:
         info = line_bot_api.get_bot_info()
         return {"status": "ok", "bot_name": info.display_name, "bot_id": info.user_id}
@@ -978,10 +994,14 @@ def debug_bot():
 
 @app.route("/logs", methods=['GET'])
 def show_logs():
+    if not _check_admin_token():
+        return {"error": "unauthorized"}, 401
     return {"logs": _log_store}
 
 @app.route("/stats", methods=['GET'])
 def stats():
+    if not _check_admin_token():
+        return {"error": "unauthorized"}, 401
     try:
         conn = get_db()
         today = datetime.now().strftime("%Y-%m-%d")
@@ -1014,12 +1034,14 @@ def callback():
 def handle_follow(event):
     uid = event.source.user_id
     conn = get_db()
-    if USE_PG:
-        conn.execute(q('INSERT INTO user_state (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING'), (uid,))
-    else:
-        conn.execute('INSERT OR IGNORE INTO user_state (user_id) VALUES (?)', (uid,))
-    conn.commit()
-    conn.close()
+    try:
+        if USE_PG:
+            conn.execute(q('INSERT INTO user_state (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING'), (uid,))
+        else:
+            conn.execute('INSERT OR IGNORE INTO user_state (user_id) VALUES (?)', (uid,))
+        conn.commit()
+    finally:
+        conn.close()
     safe_reply(event.reply_token, get_terms_flex())
 
 # --- 8. Postback 處理 ---
@@ -1773,6 +1795,16 @@ def handle_message(event):
             ))
             return
 
+        # 拒絕過去時間
+        if tt and tt < datetime.now().strftime("%Y-%m-%dT%H:%M"):
+            safe_reply(event.reply_token, TextSendMessage(
+                text="⚠️ 出發時間已過，無法發布過去的行程。\n\n請重新選擇出發時間：",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=DatetimePickerAction(label="🕒 重新選擇", data="select_time", mode="datetime"))
+                ])
+            ))
+            return
+
         # 尚未填寫 LINE ID → 提示輸入（優先用上次記住的 ID）
         if lid is None:
             conn = get_db()
@@ -1832,6 +1864,11 @@ def handle_message(event):
         if res and res[0] and res[0].startswith('EDIT_LINE_ID:'):
             match_id = res[0].split(':', 1)[1]
             new_lid = '' if msg == '清除LINE ID' else msg.strip().lstrip('@')
+            if new_lid and not re.match(r'^[a-zA-Z0-9._-]{1,30}$', new_lid):
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入："
+                ))
+                return
             conn2 = get_db()
             conn2.execute(q('UPDATE matches SET line_id = ? WHERE id = ? AND user_id = ?'), (new_lid, match_id, uid))
             conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
@@ -1871,6 +1908,14 @@ def handle_message(event):
                 ))
                 return
             line_id = '' if msg == '跳過' else msg.strip().lstrip('@')
+            if line_id and not re.match(r'^[a-zA-Z0-9._-]{1,30}$', line_id):
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入，或按跳過：",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
+                    ])
+                ))
+                return
             conn = get_db()
             conn.execute(q('UPDATE user_state SET temp_line_id = ?, step = ? WHERE user_id = ?'), (line_id, 'DONE', uid))
             conn.commit()
