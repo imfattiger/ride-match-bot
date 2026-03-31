@@ -226,6 +226,8 @@ SCHEMA_MIGRATIONS = [
     (19,
      "CREATE TABLE IF NOT EXISTS pending_pushes (id SERIAL PRIMARY KEY, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
      "CREATE TABLE IF NOT EXISTS pending_pushes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+    (20, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS notify_on_match INTEGER DEFAULT 1",
+         "ALTER TABLE user_state ADD COLUMN notify_on_match INTEGER DEFAULT 1"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -358,6 +360,19 @@ def safe_reply(reply_token, messages):
     except Exception as e:
         logging.error(f"Reply failed: {e}")
         _store_log("reply_fail", str(e))
+
+def is_notify_enabled(user_id):
+    """查詢使用者是否開啟配對通知（預設開啟）"""
+    try:
+        _nc = get_db()
+        try:
+            row = _nc.execute(q("SELECT notify_on_match FROM user_state WHERE user_id = ?"), (user_id,)).fetchone()
+        finally:
+            _nc.close()
+        return (row[0] if row and row[0] is not None else 1) == 1
+    except:
+        return True  # 查不到時預設送出
+
 
 def safe_push(user_id, messages):
     try:
@@ -925,8 +940,9 @@ def do_publish(uid, reply_token):
                 pair_conn.commit()
             finally:
                 pair_conn.close()
-            # 被動推播：通知既有配對者（含發布者的 LINE ID）
-            safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid))
+            # 被動推播：通知既有配對者（含發布者的 LINE ID），尊重對方通知設定
+            if is_notify_enabled(m[0]):
+                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid))
 
         rating_conn.close()
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
@@ -1237,10 +1253,11 @@ def handle_postback(event):
                     text="🎉 行程完成！請為配對對象評分：",
                     quick_reply=_rate_qr(partner_uid, partner_mid)
                 ))
-                safe_push(partner_uid, TextSendMessage(
-                    text="🔔 你的配對行程已完成！請為對方評分：",
-                    quick_reply=_rate_qr(uid, my_mid)
-                ))
+                if is_notify_enabled(partner_uid):
+                    safe_push(partner_uid, TextSendMessage(
+                        text="🔔 你的配對行程已完成！請為對方評分：",
+                        quick_reply=_rate_qr(uid, my_mid)
+                    ))
             else:
                 safe_reply(event.reply_token, TextSendMessage(text="🎉 行程已標記完成！"))
 
@@ -1411,6 +1428,27 @@ def handle_message(event):
             flush_pending_pushes(uid)
         else:
             safe_reply(event.reply_token, TextSendMessage(text="✅ 目前沒有未送出的配對通知。"))
+        return
+
+    # --- 配對通知開關 ---
+    if msg in ["關閉配對通知", "停止配對通知"]:
+        conn = get_db()
+        try:
+            conn.execute(q("UPDATE user_state SET notify_on_match = 0 WHERE user_id = ?"), (uid,))
+            conn.commit()
+        finally:
+            conn.close()
+        safe_reply(event.reply_token, TextSendMessage(text="🔕 已關閉配對通知。\n\n有新配對時不會主動通知你，可隨時輸入「開啟配對通知」恢復。"))
+        return
+
+    if msg in ["開啟配對通知", "恢復配對通知"]:
+        conn = get_db()
+        try:
+            conn.execute(q("UPDATE user_state SET notify_on_match = 1 WHERE user_id = ?"), (uid,))
+            conn.commit()
+        finally:
+            conn.close()
+        safe_reply(event.reply_token, TextSendMessage(text="🔔 已開啟配對通知。有新配對時會主動通知你。"))
         return
 
     # --- 我的行程 ---
