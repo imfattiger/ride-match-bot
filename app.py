@@ -239,7 +239,8 @@ def init_db():
         c.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
     conn.commit()
     # 讀取當前版本（無資料 = 0，全新 DB 或尚未版控）
-    row = c.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").fetchone()
+    c.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
+    row = c.fetchone()
     current_version = row[0] if row else 0
     if current_version >= SCHEMA_VERSION:
         conn.close()
