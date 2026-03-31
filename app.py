@@ -751,47 +751,46 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id):
 # --- 發布核心邏輯（供 最終確認發布 和 WAIT_LINE_ID 共用）---
 def do_publish(uid, reply_token):
     conn = get_db()
-    res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-    if not res:
-        safe_reply(reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
-        conn.close()
-        return
-    ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp = res
-    lid = lid or ''
-    expire_days = int(exp) if exp else 3
-    expires_at = (datetime.now() + timedelta(days=expire_days)).strftime("%Y-%m-%dT%H:%M")
+    try:
+        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+        if not res:
+            safe_reply(reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
+            return
+        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp = res
+        lid = lid or ''
+        expire_days = int(exp) if exp else 3
+        expires_at = (datetime.now() + timedelta(days=expire_days)).strftime("%Y-%m-%dT%H:%M")
 
-    # 發行程數量上限（最多 3 筆 active）
-    active_count = conn.execute(q(
-        "SELECT COUNT(*) FROM matches WHERE user_id = ? AND status = 'active'"
-    ), (uid,)).fetchone()[0]
-    if active_count >= 3:
-        safe_reply(reply_token, TextSendMessage(
-            text="⚠️ 你目前已有 3 筆生效中的行程，請先刪除舊行程後再發布新行程。\n\n輸入「我的行程」可管理現有行程。"
-        ))
-        conn.close()
-        return
+        # 發行程數量上限（最多 3 筆 active）
+        active_count = conn.execute(q(
+            "SELECT COUNT(*) FROM matches WHERE user_id = ? AND status = 'active'"
+        ), (uid,)).fetchone()[0]
+        if active_count >= 3:
+            safe_reply(reply_token, TextSendMessage(
+                text="⚠️ 你目前已有 3 筆生效中的行程，請先刪除舊行程後再發布新行程。\n\n輸入「我的行程」可管理現有行程。"
+            ))
+            return
 
-    # 防重複發布
-    existing = conn.execute(q(
-        "SELECT id FROM matches WHERE user_id = ? AND user_type = ? AND time_info = ? AND s_city = ? AND s_dist = ? AND e_city = ? AND e_dist = ? AND status = 'active'"
-    ), (uid, ut, tt, sc, sd, ec, ed)).fetchone()
-    if existing:
-        safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
-        conn.close()
-        return
+        # 防重複發布
+        existing = conn.execute(q(
+            "SELECT id FROM matches WHERE user_id = ? AND user_type = ? AND time_info = ? AND s_city = ? AND s_dist = ? AND e_city = ? AND e_dist = ? AND status = 'active'"
+        ), (uid, ut, tt, sc, sd, ec, ed)).fetchone()
+        if existing:
+            safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
+            return
 
-    cursor = conn.cursor()
-    if USE_PG:
-        cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id'),
-                       (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
-        new_id = cursor.fetchone()[0]
-    else:
-        cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                       (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
-        new_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+        cursor = conn.cursor()
+        if USE_PG:
+            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id'),
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
+            new_id = cursor.fetchone()[0]
+        else:
+            cursor.execute('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
+            new_id = cursor.lastrowid
+        conn.commit()
+    finally:
+        conn.close()
 
     m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc)
     output = [get_publish_confirm_flex(res[:12], new_id)]
@@ -844,14 +843,16 @@ def do_publish(uid, reply_token):
             })
             # 儲存配對關係
             pair_conn = get_db()
-            if USE_PG:
-                pair_conn.execute(q('INSERT INTO pairs (uid_a, match_id_a, uid_b, match_id_b) VALUES (?,?,?,?)'),
-                                  (uid, new_id, m[0], m[11]))
-            else:
-                pair_conn.execute('INSERT OR IGNORE INTO pairs (uid_a, match_id_a, uid_b, match_id_b) VALUES (?,?,?,?)',
-                                  (uid, new_id, m[0], m[11]))
-            pair_conn.commit()
-            pair_conn.close()
+            try:
+                if USE_PG:
+                    pair_conn.execute(q('INSERT INTO pairs (uid_a, match_id_a, uid_b, match_id_b) VALUES (?,?,?,?)'),
+                                      (uid, new_id, m[0], m[11]))
+                else:
+                    pair_conn.execute('INSERT OR IGNORE INTO pairs (uid_a, match_id_a, uid_b, match_id_b) VALUES (?,?,?,?)',
+                                      (uid, new_id, m[0], m[11]))
+                pair_conn.commit()
+            finally:
+                pair_conn.close()
             # 被動推播：通知既有配對者（含發布者的 LINE ID）
             safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid))
 
@@ -1057,13 +1058,15 @@ def handle_postback(event):
     try:
         if data == "action=agree_terms":
             conn = get_db()
-            if USE_PG:
-                conn.execute(q('INSERT INTO user_state (user_id, agreed_terms) VALUES (?, 1) ON CONFLICT (user_id) DO UPDATE SET agreed_terms = 1'), (uid,))
-            else:
-                conn.execute('INSERT OR IGNORE INTO user_state (user_id) VALUES (?)', (uid,))
-                conn.execute('UPDATE user_state SET agreed_terms = 1 WHERE user_id = ?', (uid,))
-            conn.commit()
-            conn.close()
+            try:
+                if USE_PG:
+                    conn.execute(q('INSERT INTO user_state (user_id, agreed_terms) VALUES (?, 1) ON CONFLICT (user_id) DO UPDATE SET agreed_terms = 1'), (uid,))
+                else:
+                    conn.execute('INSERT OR IGNORE INTO user_state (user_id) VALUES (?)', (uid,))
+                    conn.execute('UPDATE user_state SET agreed_terms = 1 WHERE user_id = ?', (uid,))
+                conn.commit()
+            finally:
+                conn.close()
             safe_reply(event.reply_token, [
                 TextSendMessage(text="✅ 感謝同意使用條款！歡迎使用 sun car 順咖媒合 🎉"),
                 get_welcome_flex()
@@ -1072,8 +1075,10 @@ def handle_postback(event):
 
         # --- 同意 gate for postback ---
         conn_chk = get_db()
-        agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
-        conn_chk.close()
+        try:
+            agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+        finally:
+            conn_chk.close()
         if not agreed_row or not agreed_row[0]:
             safe_reply(event.reply_token, get_terms_flex())
             return
@@ -1081,30 +1086,36 @@ def handle_postback(event):
         if data == "select_time":
             t = event.postback.params['datetime']
             conn = get_db()
-            conn.execute(q('UPDATE user_state SET temp_time = ?, step = ? WHERE user_id = ?'), (t, "START", uid))
-            conn.commit()
-            conn.close()
+            try:
+                conn.execute(q('UPDATE user_state SET temp_time = ?, step = ? WHERE user_id = ?'), (t, "START", uid))
+                conn.commit()
+            finally:
+                conn.close()
             safe_reply(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
 
         elif data.startswith("action=delete"):
             params = dict(parse_qsl(data))
             match_id = params.get('id')
             conn = get_db()
-            conn.execute(q('DELETE FROM matches WHERE id = ? AND user_id = ?'), (match_id, uid))
-            conn.commit()
-            conn.close()
+            try:
+                conn.execute(q('DELETE FROM matches WHERE id = ? AND user_id = ?'), (match_id, uid))
+                conn.commit()
+            finally:
+                conn.close()
             safe_reply(event.reply_token, TextSendMessage(text=f"🗑️ 已成功刪除行程 (編號: {match_id})"))
 
         elif data.startswith("action=complete"):
             params = dict(parse_qsl(data))
             match_id = params.get('id')
             conn = get_db()
-            conn.execute(q("UPDATE matches SET status = 'completed' WHERE id = ? AND user_id = ?"), (match_id, uid))
-            conn.commit()
-            pairs = conn.execute(q(
-                "SELECT uid_a, match_id_a, uid_b, match_id_b FROM pairs WHERE match_id_a = ? OR match_id_b = ?"
-            ), (match_id, match_id)).fetchall()
-            conn.close()
+            try:
+                conn.execute(q("UPDATE matches SET status = 'completed' WHERE id = ? AND user_id = ?"), (match_id, uid))
+                conn.commit()
+                pairs = conn.execute(q(
+                    "SELECT uid_a, match_id_a, uid_b, match_id_b FROM pairs WHERE match_id_a = ? OR match_id_b = ?"
+                ), (match_id, match_id)).fetchall()
+            finally:
+                conn.close()
 
             partners = []
             for p in pairs:
@@ -1146,33 +1157,36 @@ def handle_postback(event):
                 safe_reply(event.reply_token, TextSendMessage(text="⚠️ 不能為自己評分。"))
                 return
             conn = get_db()
-            pair = conn.execute(q(
-                "SELECT id FROM pairs WHERE (uid_a = ? AND uid_b = ?) OR (uid_a = ? AND uid_b = ?)"
-            ), (uid, ratee_id, ratee_id, uid)).fetchone()
-            if not pair:
+            try:
+                pair = conn.execute(q(
+                    "SELECT id FROM pairs WHERE (uid_a = ? AND uid_b = ?) OR (uid_a = ? AND uid_b = ?)"
+                ), (uid, ratee_id, ratee_id, uid)).fetchone()
+                if not pair:
+                    safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到你們的配對記錄，無法評分。"))
+                    return
+                if USE_PG:
+                    conn.execute(q(
+                        'INSERT INTO ratings (rater_id, ratee_id, match_id, score) VALUES (?,?,?,?) ON CONFLICT (match_id, rater_id) DO NOTHING'
+                    ), (uid, ratee_id, match_id, score))
+                else:
+                    conn.execute(
+                        'INSERT OR IGNORE INTO ratings (rater_id, ratee_id, match_id, score) VALUES (?,?,?,?)',
+                        (uid, ratee_id, match_id, score)
+                    )
+                conn.commit()
+            finally:
                 conn.close()
-                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到你們的配對記錄，無法評分。"))
-                return
-            if USE_PG:
-                conn.execute(q(
-                    'INSERT INTO ratings (rater_id, ratee_id, match_id, score) VALUES (?,?,?,?) ON CONFLICT (match_id, rater_id) DO NOTHING'
-                ), (uid, ratee_id, match_id, score))
-            else:
-                conn.execute(
-                    'INSERT OR IGNORE INTO ratings (rater_id, ratee_id, match_id, score) VALUES (?,?,?,?)',
-                    (uid, ratee_id, match_id, score)
-                )
-            conn.commit()
-            conn.close()
             safe_reply(event.reply_token, TextSendMessage(text=f"感謝評價！你給了 {'⭐' * int(score)}"))
 
         elif data.startswith("action=cancel"):
             params = dict(parse_qsl(data))
             match_id = params.get('id')
             conn = get_db()
-            conn.execute(q("UPDATE matches SET status = 'cancelled' WHERE id = ? AND user_id = ?"), (match_id, uid))
-            conn.commit()
-            conn.close()
+            try:
+                conn.execute(q("UPDATE matches SET status = 'cancelled' WHERE id = ? AND user_id = ?"), (match_id, uid))
+                conn.commit()
+            finally:
+                conn.close()
             safe_reply(event.reply_token, TextSendMessage(text=f"🚫 行程已取消 (編號: {match_id})"))
 
         elif data.startswith("action=report"):
@@ -1189,15 +1203,17 @@ def handle_postback(event):
             params = dict(parse_qsl(data))
             match_id = params.get('id')
             conn = get_db()
-            if USE_PG:
-                conn.execute(q('''INSERT INTO user_state (user_id, step)
-                    VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
-                    (uid, f'EDIT_LINE_ID:{match_id}'))
-            else:
-                conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)',
-                    (uid, f'EDIT_LINE_ID:{match_id}'))
-            conn.commit()
-            conn.close()
+            try:
+                if USE_PG:
+                    conn.execute(q('''INSERT INTO user_state (user_id, step)
+                        VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
+                        (uid, f'EDIT_LINE_ID:{match_id}'))
+                else:
+                    conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)',
+                        (uid, f'EDIT_LINE_ID:{match_id}'))
+                conn.commit()
+            finally:
+                conn.close()
             safe_reply(event.reply_token, TextSendMessage(
                 text="請輸入新的 LINE ID（輸入後直接送出，不需加 @）：",
                 quick_reply=QuickReply(items=[
@@ -1231,15 +1247,17 @@ def handle_postback(event):
             params = dict(parse_qsl(data))
             to_uid = params.get('to', '')
             conn = get_db()
-            if USE_PG:
-                conn.execute(q('''INSERT INTO user_state (user_id, step)
-                    VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
-                    (uid, f'SHARE_LINE_ID:{to_uid}'))
-            else:
-                conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)',
-                    (uid, f'SHARE_LINE_ID:{to_uid}'))
-            conn.commit()
-            conn.close()
+            try:
+                if USE_PG:
+                    conn.execute(q('''INSERT INTO user_state (user_id, step)
+                        VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
+                        (uid, f'SHARE_LINE_ID:{to_uid}'))
+                else:
+                    conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)',
+                        (uid, f'SHARE_LINE_ID:{to_uid}'))
+                conn.commit()
+            finally:
+                conn.close()
             safe_reply(event.reply_token, TextSendMessage(text="請直接輸入你的 LINE ID（如 @abc123），我們會立即傳給對方："))
     except Exception as e:
         logging.error(f"Postback error for {uid}: {e}")
@@ -1257,8 +1275,10 @@ def handle_message(event):
     # --- 免責同意 gate ---
     if msg not in ["免責聲明", "使用條款"]:
         conn_chk = get_db()
-        agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
-        conn_chk.close()
+        try:
+            agreed_row = conn_chk.execute(q("SELECT agreed_terms FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+        finally:
+            conn_chk.close()
         if not agreed_row or not agreed_row[0]:
             safe_reply(event.reply_token, get_terms_flex())
             return
@@ -1270,11 +1290,13 @@ def handle_message(event):
     # --- 我的行程 ---
     if msg == "我的行程":
         conn = get_db()
-        my_matches = conn.execute(
-            q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
-            (uid,)
-        ).fetchall()
-        conn.close()
+        try:
+            my_matches = conn.execute(
+                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
+                (uid,)
+            ).fetchall()
+        finally:
+            conn.close()
 
         if not my_matches:
             safe_reply(event.reply_token, TextSendMessage(text="📭 您目前沒有生效中的行程。"))
@@ -1337,14 +1359,16 @@ def handle_message(event):
     # --- 幫助 / 使用說明（Item 3）---
     elif msg in ["回報問題", "建議", "意見回饋", "回饋", "feedback"]:
         conn = get_db()
-        if USE_PG:
-            conn.execute(q('''INSERT INTO user_state (user_id, step)
-                VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
-                (uid, 'FEEDBACK'))
-        else:
-            conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)', (uid, 'FEEDBACK'))
-        conn.commit()
-        conn.close()
+        try:
+            if USE_PG:
+                conn.execute(q('''INSERT INTO user_state (user_id, step)
+                    VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
+                    (uid, 'FEEDBACK'))
+            else:
+                conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)', (uid, 'FEEDBACK'))
+            conn.commit()
+        finally:
+            conn.close()
         safe_reply(event.reply_token, TextSendMessage(
             text="📝 請直接輸入你的問題或建議，送出後我們會收到通知：",
             quick_reply=QuickReply(items=[
@@ -1355,9 +1379,11 @@ def handle_message(event):
 
     elif msg == "取消回報":
         conn = get_db()
-        conn.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+            conn.commit()
+        finally:
+            conn.close()
         safe_reply(event.reply_token, TextSendMessage(text="已取消。"))
         return
 
@@ -1367,10 +1393,12 @@ def handle_message(event):
 
     elif msg == "刪除我的資料":
         conn = get_db()
-        conn.execute(q("DELETE FROM matches WHERE user_id = ?"), (uid,))
-        conn.execute(q("DELETE FROM user_state WHERE user_id = ?"), (uid,))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(q("DELETE FROM matches WHERE user_id = ?"), (uid,))
+            conn.execute(q("DELETE FROM user_state WHERE user_id = ?"), (uid,))
+            conn.commit()
+        finally:
+            conn.close()
         safe_reply(event.reply_token, TextSendMessage(
             text="✅ 已刪除你的所有行程與使用記錄。\n\n若日後想再使用，重新加入好友即可。"
         ))
@@ -1379,8 +1407,10 @@ def handle_message(event):
     # --- 繼續填寫（Item 6）---
     elif msg == "繼續填寫":
         conn = get_db()
-        res = conn.execute(q('SELECT step, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        conn.close()
+        try:
+            res = conn.execute(q('SELECT step, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+        finally:
+            conn.close()
         if not res:
             safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
@@ -1496,17 +1526,6 @@ def handle_message(event):
             time_cond = ""
             time_vals = []
 
-        conn = get_db()
-        base_cond = f"status = 'active' AND (s_city = ? OR e_city = ?){time_cond}"
-        if ftype == "all":
-            rows = conn.execute(q(
-                f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE {base_cond} ORDER BY time_info LIMIT 10"
-            ), [city, city] + time_vals).fetchall()
-        else:
-            rows = conn.execute(q(
-                f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE user_type = ? AND {base_cond} ORDER BY time_info LIMIT 10"
-            ), [ftype, city, city] + time_vals).fetchall()
-
         filter_labels = {"today": ("📌今天", "本週", "全部"), "week": ("今天", "📌本週", "全部")}.get(tfilter, ("今天", "本週", "📌全部"))
         filter_qr = QuickReply(items=[
             QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}")),
@@ -1514,85 +1533,97 @@ def handle_message(event):
             QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}"))
         ])
 
-        if not rows:
-            conn.close()
-            label = {"driver": "司機", "seeker": "乘客"}.get(ftype, "")
-            time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "")
-            safe_reply(event.reply_token, TextSendMessage(
-                text=f"📭 目前 {city} {time_hint}暫無{label}行程。\n換個時間範圍試試，或發布行程讓別人找到你！",
-                quick_reply=filter_qr
-            ))
-            return
-
-        bubbles = []
-        for r in rows:
-            trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid = r
-            avg, cnt = get_user_rating(conn, owner_uid)
-            rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
-            icon = "🚗" if utype == 'driver' else "🙋"
-            role = "司機" if utype == 'driver' else "乘客"
-            hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
-            is_own = (owner_uid == uid)
-            if is_own:
-                footer_contents = [
-                    {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
-                     "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={trip_id}"}},
-                    {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                        {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                         "action": {"type": "postback", "label": "✏️ LINE ID", "data": f"action=edit_line_id&id={trip_id}"}},
-                        {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                         "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={trip_id}"}}
-                    ]}
-                ]
-            elif lid:
-                footer_contents = [
-                    {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
-                     "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}},
-                    {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
-                     "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
-                ]
+        conn = get_db()
+        try:
+            base_cond = f"status = 'active' AND (s_city = ? OR e_city = ?){time_cond}"
+            if ftype == "all":
+                rows = conn.execute(q(
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE {base_cond} ORDER BY time_info LIMIT 10"
+                ), [city, city] + time_vals).fetchall()
             else:
-                footer_contents = [
-                    {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
-                     "action": {"type": "postback", "label": "📨 通知對方留聯絡方式",
-                                "data": f"action=contact_req&to={owner_uid}&route={sc}{sd}→{ec}{ed}"}},
-                    {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
-                     "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
+                rows = conn.execute(q(
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE user_type = ? AND {base_cond} ORDER BY time_info LIMIT 10"
+                ), [ftype, city, city] + time_vals).fetchall()
+
+            if not rows:
+                label = {"driver": "司機", "seeker": "乘客"}.get(ftype, "")
+                time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "")
+                safe_reply(event.reply_token, TextSendMessage(
+                    text=f"📭 目前 {city} {time_hint}暫無{label}行程。\n換個時間範圍試試，或發布行程讓別人找到你！",
+                    quick_reply=filter_qr
+                ))
+                return
+
+            bubbles = []
+            for r in rows:
+                trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid = r
+                avg, cnt = get_user_rating(conn, owner_uid)
+                rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
+                icon = "🚗" if utype == 'driver' else "🙋"
+                role = "司機" if utype == 'driver' else "乘客"
+                hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
+                is_own = (owner_uid == uid)
+                if is_own:
+                    footer_contents = [
+                        {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                         "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={trip_id}"}},
+                        {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                             "action": {"type": "postback", "label": "✏️ LINE ID", "data": f"action=edit_line_id&id={trip_id}"}},
+                            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                             "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={trip_id}"}}
+                        ]}
+                    ]
+                elif lid:
+                    footer_contents = [
+                        {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                         "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}},
+                        {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
+                         "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
+                    ]
+                else:
+                    footer_contents = [
+                        {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
+                         "action": {"type": "postback", "label": "📨 通知對方留聯絡方式",
+                                    "data": f"action=contact_req&to={owner_uid}&route={sc}{sd}→{ec}{ed}"}},
+                        {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
+                         "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
+                    ]
+                body_rows = [
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": tinfo[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]}
                 ]
-            body_rows = [
-                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                    {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                    {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
-                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                    {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                    {"type": "text", "text": tinfo[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
-                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                    {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                    {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 4}]},
-                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                    {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                    {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
-                {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                    {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                    {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]}
-            ]
-            if is_own:
-                body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#aaaaaa", "align": "end"})
-            bubbles.append({
-                "type": "bubble",
-                "header": {"type": "box", "layout": "vertical",
-                    "contents": [{"type": "text", "text": f"{icon} {role}", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
-                    "backgroundColor": hdr_color},
-                "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_rows},
-                "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": footer_contents}
-            })
-        # 累加瀏覽次數
-        trip_ids = [r[0] for r in rows]
-        if trip_ids:
-            placeholders = ','.join(['?' if not USE_PG else '%s'] * len(trip_ids))
-            conn.execute(f"UPDATE matches SET view_count = view_count + 1 WHERE id IN ({placeholders})", trip_ids)
-            conn.commit()
-        conn.close()
+                if is_own:
+                    body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#aaaaaa", "align": "end"})
+                bubbles.append({
+                    "type": "bubble",
+                    "header": {"type": "box", "layout": "vertical",
+                        "contents": [{"type": "text", "text": f"{icon} {role}", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+                        "backgroundColor": hdr_color},
+                    "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_rows},
+                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": footer_contents}
+                })
+            # 累加瀏覽次數
+            trip_ids = [r[0] for r in rows]
+            if trip_ids:
+                placeholders = ','.join(['?' if not USE_PG else '%s'] * len(trip_ids))
+                conn.execute(f"UPDATE matches SET view_count = view_count + 1 WHERE id IN ({placeholders})", trip_ids)
+                conn.commit()
+        finally:
+            conn.close()
         time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "全部")
         safe_reply(event.reply_token, [
             TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{len(rows)} 筆）"),
@@ -1621,21 +1652,25 @@ def handle_message(event):
     elif msg.startswith("/ban ") and uid == ADMIN_LINE_ID:
         target = msg[5:].strip()
         conn = get_db()
-        if USE_PG:
-            conn.execute(q("INSERT INTO blocked_users (user_id, reason) VALUES (?, 'admin_ban') ON CONFLICT (user_id) DO NOTHING"), (target,))
-        else:
-            conn.execute("INSERT OR IGNORE INTO blocked_users (user_id, reason) VALUES (?, 'admin_ban')", (target,))
-        conn.commit()
-        conn.close()
+        try:
+            if USE_PG:
+                conn.execute(q("INSERT INTO blocked_users (user_id, reason) VALUES (?, 'admin_ban') ON CONFLICT (user_id) DO NOTHING"), (target,))
+            else:
+                conn.execute("INSERT OR IGNORE INTO blocked_users (user_id, reason) VALUES (?, 'admin_ban')", (target,))
+            conn.commit()
+        finally:
+            conn.close()
         safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已封鎖用戶：{target}"))
         return
 
     elif msg.startswith("/unban ") and uid == ADMIN_LINE_ID:
         target = msg[7:].strip()
         conn = get_db()
-        conn.execute(q("DELETE FROM blocked_users WHERE user_id = ?"), (target,))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(q("DELETE FROM blocked_users WHERE user_id = ?"), (target,))
+            conn.commit()
+        finally:
+            conn.close()
         safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已解封用戶：{target}"))
         return
 
@@ -1644,16 +1679,18 @@ def handle_message(event):
         clean_expired_matches()
         ut = 'driver' if "載客" in msg else 'seeker'
         conn = get_db()
-        if USE_PG:
-            conn.execute(q('''INSERT INTO user_state (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, step)
-                VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '', NULL, 'START')
-                ON CONFLICT (user_id) DO UPDATE SET current_type=EXCLUDED.current_type,
-                temp_time=NULL, s_city=NULL, s_dist=NULL, e_city=NULL, e_dist=NULL,
-                temp_way=NULL, temp_count=NULL, temp_fee=NULL, temp_flex=NULL, temp_prefs='', temp_line_id=NULL, step='START' '''), (uid, ut))
-        else:
-            conn.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, step) VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "", NULL, "START")', (uid, ut))
-        conn.commit()
-        conn.close()
+        try:
+            if USE_PG:
+                conn.execute(q('''INSERT INTO user_state (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, step)
+                    VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '', NULL, 'START')
+                    ON CONFLICT (user_id) DO UPDATE SET current_type=EXCLUDED.current_type,
+                    temp_time=NULL, s_city=NULL, s_dist=NULL, e_city=NULL, e_dist=NULL,
+                    temp_way=NULL, temp_count=NULL, temp_fee=NULL, temp_flex=NULL, temp_prefs='', temp_line_id=NULL, step='START' '''), (uid, ut))
+            else:
+                conn.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, step) VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "", NULL, "START")', (uid, ut))
+            conn.commit()
+        finally:
+            conn.close()
         safe_reply(event.reply_token, TextSendMessage(
             text="🕒 請選擇日期時間：",
             quick_reply=QuickReply(items=[
@@ -1670,12 +1707,14 @@ def handle_message(event):
     elif msg.startswith("縣市:"):
         c = msg.split(":")[1]
         conn = get_db()
-        res = conn.execute(q('SELECT step FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        step = res[0] if res else "START"
-        col = "s_city" if step == "START" else "e_city"
-        conn.execute(q(f'UPDATE user_state SET {col} = ? WHERE user_id = ?'), (c, uid))
-        conn.commit()
-        conn.close()
+        try:
+            res = conn.execute(q('SELECT step FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+            step = res[0] if res else "START"
+            col = "s_city" if step == "START" else "e_city"
+            conn.execute(q(f'UPDATE user_state SET {col} = ? WHERE user_id = ?'), (c, uid))
+            conn.commit()
+        finally:
+            conn.close()
         dists = DISTRICT_DATA.get(c, ["市中心"])
         btns = [QuickReplyButton(action=MessageAction(label=d, text=f"區:{d}")) for d in dists[:13]]
         safe_reply(event.reply_token, TextSendMessage(text=f"請選擇 {c} 的行政區：", quick_reply=QuickReply(items=btns)))
@@ -1683,17 +1722,19 @@ def handle_message(event):
     elif msg.startswith("區:"):
         d = msg.split(":")[1]
         conn = get_db()
-        res = conn.execute(q('SELECT step FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        step = res[0] if res else "START"
-        if step == "START":
-            conn.execute(q('UPDATE user_state SET s_dist = ?, step = ? WHERE user_id = ?'), (d, "END", uid))
+        try:
+            res = conn.execute(q('SELECT step FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+            step = res[0] if res else "START"
+            if step == "START":
+                conn.execute(q('UPDATE user_state SET s_dist = ?, step = ? WHERE user_id = ?'), (d, "END", uid))
+            else:
+                conn.execute(q('UPDATE user_state SET e_dist = ?, step = ? WHERE user_id = ?'), (d, "DONE", uid))
             conn.commit()
+        finally:
             conn.close()
+        if step == "START":
             safe_reply(event.reply_token, get_area_carousel("🏁 第二步：選擇【目的地】區域"))
         else:
-            conn.execute(q('UPDATE user_state SET e_dist = ?, step = ? WHERE user_id = ?'), (d, "DONE", uid))
-            conn.commit()
-            conn.close()
             safe_reply(event.reply_token, [
                 TextSendMessage(text="✅ 路線設定完成！\n\n接下來填寫行程細節：\n・中途：是否接受途中上下車\n・人數：最多幾位乘客\n・乘客費用：你希望的收費方式\n・刊登天數：行程在平台顯示幾天\n\n最後點「時間彈性」進入下一步 👇"),
                 get_detail_flex()
@@ -1701,39 +1742,49 @@ def handle_message(event):
 
     elif msg.startswith("中途:"):
         conn = get_db()
-        conn.execute(q('UPDATE user_state SET temp_way = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(q('UPDATE user_state SET temp_way = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
+            conn.commit()
+        finally:
+            conn.close()
 
     elif msg.startswith("人數:"):
         conn = get_db()
-        conn.execute(q('UPDATE user_state SET temp_count = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(q('UPDATE user_state SET temp_count = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
+            conn.commit()
+        finally:
+            conn.close()
 
     elif msg.startswith("費用:"):
         conn = get_db()
-        conn.execute(q('UPDATE user_state SET temp_fee = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(q('UPDATE user_state SET temp_fee = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
+            conn.commit()
+        finally:
+            conn.close()
 
     elif msg.startswith("有效:"):
         conn = get_db()
-        conn.execute(q('UPDATE user_state SET temp_expire = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(q('UPDATE user_state SET temp_expire = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
+            conn.commit()
+        finally:
+            conn.close()
 
     elif msg.startswith("彈性:"):
         conn = get_db()
-        res = conn.execute(q('SELECT temp_count, temp_fee, temp_way, temp_expire FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        conn.execute(q('UPDATE user_state SET temp_flex = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
-        # 若中途/有效天數未選，設預設值
-        if res and not res[2]:
-            conn.execute(q('UPDATE user_state SET temp_way = ? WHERE user_id = ?'), ('接受', uid))
-        if res and not res[3]:
-            conn.execute(q('UPDATE user_state SET temp_expire = ? WHERE user_id = ?'), ('3', uid))
-        conn.commit()
-        conn.close()
+        try:
+            res = conn.execute(q('SELECT temp_count, temp_fee, temp_way, temp_expire FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+            conn.execute(q('UPDATE user_state SET temp_flex = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
+            # 若中途/有效天數未選，設預設值
+            if res and not res[2]:
+                conn.execute(q('UPDATE user_state SET temp_way = ? WHERE user_id = ?'), ('接受', uid))
+            if res and not res[3]:
+                conn.execute(q('UPDATE user_state SET temp_expire = ? WHERE user_id = ?'), ('3', uid))
+            conn.commit()
+        finally:
+            conn.close()
 
         pc = res[0] if res else None
         fe = res[1] if res else None
@@ -1754,11 +1805,13 @@ def handle_message(event):
     elif msg.startswith("規範:"):
         p = msg.split(":")[1]
         conn = get_db()
-        res = conn.execute(q('SELECT temp_prefs FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        p_str = (res[0] if res and res[0] else "") + f"{p}, "
-        conn.execute(q('UPDATE user_state SET temp_prefs = ? WHERE user_id = ?'), (p_str, uid))
-        conn.commit()
-        conn.close()
+        try:
+            res = conn.execute(q('SELECT temp_prefs FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+            p_str = (res[0] if res and res[0] else "") + f"{p}, "
+            conn.execute(q('UPDATE user_state SET temp_prefs = ? WHERE user_id = ?'), (p_str, uid))
+            conn.commit()
+        finally:
+            conn.close()
         safe_reply(event.reply_token, TextSendMessage(
             text=f"✅ 已加：{p}\n目前：{p_str.rstrip(', ')}",
             quick_reply=QuickReply(items=[
@@ -1772,8 +1825,10 @@ def handle_message(event):
 
     elif msg == "最終確認發布":
         conn = get_db()
-        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-        conn.close()
+        try:
+            res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+        finally:
+            conn.close()
 
         if not res:
             safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
@@ -1808,13 +1863,14 @@ def handle_message(event):
         # 尚未填寫 LINE ID → 提示輸入（優先用上次記住的 ID）
         if lid is None:
             conn = get_db()
-            conn.execute(q('UPDATE user_state SET step = ? WHERE user_id = ?'), ('WAIT_LINE_ID', uid))
-            conn.commit()
-            # 查詢用戶上次發布過的 LINE ID
-            prev = conn.execute(q(
-                "SELECT line_id FROM matches WHERE user_id = ? AND line_id != '' ORDER BY created_at DESC LIMIT 1"
-            ), (uid,)).fetchone()
-            conn.close()
+            try:
+                conn.execute(q('UPDATE user_state SET step = ? WHERE user_id = ?'), ('WAIT_LINE_ID', uid))
+                conn.commit()
+                prev = conn.execute(q(
+                    "SELECT line_id FROM matches WHERE user_id = ? AND line_id != '' ORDER BY created_at DESC LIMIT 1"
+                ), (uid,)).fetchone()
+            finally:
+                conn.close()
             if prev and prev[0]:
                 saved_id = prev[0]
                 safe_reply(event.reply_token, TextSendMessage(
@@ -1840,8 +1896,10 @@ def handle_message(event):
     else:
         try:
             conn = get_db()
-            res = conn.execute(q('SELECT step, current_type FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-            conn.close()
+            try:
+                res = conn.execute(q('SELECT step, current_type FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+            finally:
+                conn.close()
         except Exception as e:
             _store_log("fallback_db_error", str(e))
             res = None
@@ -1850,9 +1908,11 @@ def handle_message(event):
         if res and res[0] == 'FEEDBACK':
             feedback_text = msg.strip()
             conn2 = get_db()
-            conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
-            conn2.commit()
-            conn2.close()
+            try:
+                conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+                conn2.commit()
+            finally:
+                conn2.close()
             if ADMIN_LINE_ID:
                 safe_push(ADMIN_LINE_ID, TextSendMessage(
                     text=f"📬 用戶回饋（uid: {uid[:12]}...）\n\n{feedback_text}"
@@ -1870,10 +1930,12 @@ def handle_message(event):
                 ))
                 return
             conn2 = get_db()
-            conn2.execute(q('UPDATE matches SET line_id = ? WHERE id = ? AND user_id = ?'), (new_lid, match_id, uid))
-            conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
-            conn2.commit()
-            conn2.close()
+            try:
+                conn2.execute(q('UPDATE matches SET line_id = ? WHERE id = ? AND user_id = ?'), (new_lid, match_id, uid))
+                conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+                conn2.commit()
+            finally:
+                conn2.close()
             result = f"已清除 LINE ID" if not new_lid else f"LINE ID 已更新為 @{new_lid}"
             safe_reply(event.reply_token, TextSendMessage(
                 text=f"✅ {result}",
@@ -1888,9 +1950,11 @@ def handle_message(event):
             to_uid = res[0].split(':', 1)[1]
             line_id = msg.strip().lstrip('@')
             conn2 = get_db()
-            conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
-            conn2.commit()
-            conn2.close()
+            try:
+                conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+                conn2.commit()
+            finally:
+                conn2.close()
             safe_push(to_uid, TextSendMessage(
                 text=f"✅ 對方回覆了 LINE ID：@{line_id}\n點此加好友：https://line.me/ti/p/~{line_id}"
             ))
@@ -1917,9 +1981,11 @@ def handle_message(event):
                 ))
                 return
             conn = get_db()
-            conn.execute(q('UPDATE user_state SET temp_line_id = ?, step = ? WHERE user_id = ?'), (line_id, 'DONE', uid))
-            conn.commit()
-            conn.close()
+            try:
+                conn.execute(q('UPDATE user_state SET temp_line_id = ?, step = ? WHERE user_id = ?'), (line_id, 'DONE', uid))
+                conn.commit()
+            finally:
+                conn.close()
             do_publish(uid, event.reply_token)
             return
 
@@ -1952,17 +2018,19 @@ def reminder_thread():
             remind_from = now.strftime("%Y-%m-%dT%H:%M")
             remind_to = (now + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
             conn = get_db()
-            trips = conn.execute(q(
-                "SELECT id, user_id, s_city, e_city, expires_at FROM matches WHERE status = 'active' AND expires_at BETWEEN ? AND ? AND reminded_at IS NULL"
-            ), (remind_from, remind_to)).fetchall()
-            for trip in trips:
-                trip_id, user_id, sc, ec, exp_at = trip
-                safe_push(user_id, TextSendMessage(
-                    text=f"⏰ 行程即將下架提醒\n\n{sc} ➔ {ec} 的行程將於 {exp_at[5:16]} 自動下架。\n\n若想延長，請輸入「我的行程」刪除後重新發布。"
-                ))
-                conn.execute(q("UPDATE matches SET reminded_at = ? WHERE id = ?"), (remind_from, trip_id))
-            conn.commit()
-            conn.close()
+            try:
+                trips = conn.execute(q(
+                    "SELECT id, user_id, s_city, e_city, expires_at FROM matches WHERE status = 'active' AND expires_at BETWEEN ? AND ? AND reminded_at IS NULL"
+                ), (remind_from, remind_to)).fetchall()
+                for trip in trips:
+                    trip_id, user_id, sc, ec, exp_at = trip
+                    safe_push(user_id, TextSendMessage(
+                        text=f"⏰ 行程即將下架提醒\n\n{sc} ➔ {ec} 的行程將於 {exp_at[5:16]} 自動下架。\n\n若想延長，請輸入「我的行程」刪除後重新發布。"
+                    ))
+                    conn.execute(q("UPDATE matches SET reminded_at = ? WHERE id = ?"), (remind_from, trip_id))
+                conn.commit()
+            finally:
+                conn.close()
         except Exception as e:
             logging.error(f"Reminder thread error: {e}")
         time.sleep(1800)
