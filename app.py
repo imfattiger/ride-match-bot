@@ -2086,6 +2086,11 @@ def handle_message(event):
         if res and res[0] and res[0].startswith('SHARE_LINE_ID:'):
             to_uid = res[0].split(':', 1)[1]
             line_id = msg.strip().lstrip('@')
+            if line_id and not re.match(r'^[a-zA-Z0-9._-]{1,30}$', line_id):
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入："
+                ))
+                return
             conn2 = get_db()
             try:
                 conn2.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
