@@ -1023,6 +1023,11 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
 def index():
     return "Bot is running!"
 
+@app.route("/ping", methods=['GET'])
+def ping():
+    """輕量 keep-alive endpoint，給 UptimeRobot / 外部監控用"""
+    return "pong", 200
+
 @app.route("/health", methods=['GET'])
 def health():
     token_ok = bool(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
@@ -2113,15 +2118,17 @@ def reminder_thread():
         time.sleep(1800)
 
 # --- 11. Keep Alive ---
+# 注意：Render free tier 進程若被殺，self-ping 也一起死。
+# 建議同時設定 UptimeRobot 每 5 分鐘 ping /ping endpoint 作為外部保活。
 def keep_alive():
-    url = os.getenv('RENDER_EXTERNAL_URL', 'https://ride-match-bot.onrender.com') + '/'
+    url = os.getenv('RENDER_EXTERNAL_URL', 'https://ride-match-bot.onrender.com') + '/ping'
     while True:
         try:
             requests.get(url, timeout=10)
             logging.info(f"Keep alive ping: {url}")
         except Exception as e:
             logging.error(f"Keep alive failed: {e}")
-        time.sleep(600)
+        time.sleep(540)  # 9 分鐘，確保 Render 15 分鐘休眠窗口內 ping 兩次
 
 # Render 環境下在模組層級啟動 keep_alive（gunicorn 不會跑 __main__）
 if os.getenv('RENDER'):
