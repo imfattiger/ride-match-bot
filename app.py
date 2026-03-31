@@ -174,85 +174,98 @@ def q(sql):
         return sql.replace('?', '%s')
     return sql
 
+# --- Schema 版本遷移表 ---
+# 每筆格式：(version, pg_sql, sqlite_sql)
+# sqlite_sql=None 代表與 pg_sql 相同（或 SQLite 不需要此步驟）
+# 新增欄位/表格時，在此 list 末尾加一筆並遞增版本號
+SCHEMA_MIGRATIONS = [
+    # v1 基礎表
+    (1,
+     "CREATE TABLE IF NOT EXISTS matches (id SERIAL PRIMARY KEY, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+     "CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+    (2,
+     "CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT, agreed_terms INTEGER DEFAULT 0)",
+     None),
+    (3,
+     "CREATE TABLE IF NOT EXISTS ratings (id SERIAL PRIMARY KEY, rater_id TEXT, ratee_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+     "CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, rater_id TEXT, ratee_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+    (4,
+     "CREATE TABLE IF NOT EXISTS pairs (id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+     "CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+    (5,
+     "CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+     None),
+    (6,
+     "CREATE TABLE IF NOT EXISTS push_log (id SERIAL PRIMARY KEY, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+     "CREATE TABLE IF NOT EXISTS push_log (id INTEGER PRIMARY KEY AUTOINCREMENT, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+    # v7-10 欄位補齊（既有 DB 遷移）
+    (7,  "ALTER TABLE matches ADD COLUMN IF NOT EXISTS line_id TEXT DEFAULT ''",
+         "ALTER TABLE matches ADD COLUMN line_id TEXT DEFAULT ''"),
+    (8,  "ALTER TABLE matches ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'",
+         "ALTER TABLE matches ADD COLUMN status TEXT DEFAULT 'active'"),
+    (9,  "ALTER TABLE matches ADD COLUMN IF NOT EXISTS expires_at TEXT",
+         "ALTER TABLE matches ADD COLUMN expires_at TEXT"),
+    (10, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0",
+         "ALTER TABLE matches ADD COLUMN view_count INTEGER DEFAULT 0"),
+    (11, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS reminded_at TEXT",
+         "ALTER TABLE matches ADD COLUMN reminded_at TEXT"),
+    (12, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_line_id TEXT",
+         "ALTER TABLE user_state ADD COLUMN temp_line_id TEXT"),
+    (13, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_expire TEXT",
+         "ALTER TABLE user_state ADD COLUMN temp_expire TEXT"),
+    (14, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS agreed_terms INTEGER DEFAULT 0",
+         "ALTER TABLE user_state ADD COLUMN agreed_terms INTEGER DEFAULT 0"),
+    (15, "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS rater_id TEXT",
+         "ALTER TABLE ratings ADD COLUMN rater_id TEXT"),
+    (16, "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS ratee_id TEXT",
+         "ALTER TABLE ratings ADD COLUMN ratee_id TEXT"),
+    # v17-19 索引 & pending_pushes
+    (17, "CREATE UNIQUE INDEX IF NOT EXISTS ratings_rater_match ON ratings(match_id, rater_id)", None),
+    (18, "CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist) WHERE status = 'active'",
+         "CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist)"),
+    (19,
+     "CREATE TABLE IF NOT EXISTS pending_pushes (id SERIAL PRIMARY KEY, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+     "CREATE TABLE IF NOT EXISTS pending_pushes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+]
+SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
+
 def init_db():
     conn = get_db()
     c = conn.cursor()
+    # 確保 schema_version table 存在
     if USE_PG:
-        c.execute('''CREATE TABLE IF NOT EXISTS matches (
-            id SERIAL PRIMARY KEY, user_id TEXT, user_type TEXT, time_info TEXT,
-            s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT,
-            way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT,
-            line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS user_state (
-            user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT,
-            s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT,
-            temp_way TEXT, temp_count TEXT, temp_fee TEXT,
-            temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT,
-            agreed_terms INTEGER DEFAULT 0)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
-            id SERIAL PRIMARY KEY, rater_id TEXT, ratee_id TEXT, match_id INTEGER,
-            score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS pairs (
-            id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER,
-            uid_b TEXT, match_id_b INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (
-            user_id TEXT PRIMARY KEY, reason TEXT,
-            blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS push_log (
-            id SERIAL PRIMARY KEY, month_key TEXT,
-            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS pending_pushes (
-            id SERIAL PRIMARY KEY, user_id TEXT, message_json TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        # 遷移既有資料表
-        for stmt in [
-            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS line_id TEXT DEFAULT ''",
-            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'",
-            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS expires_at TEXT",
-            "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_line_id TEXT",
-            "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_expire TEXT",
-            "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS agreed_terms INTEGER DEFAULT 0",
-            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0",
-            "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS rater_id TEXT",
-            "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS ratee_id TEXT",
-            "CREATE UNIQUE INDEX IF NOT EXISTS ratings_rater_match ON ratings(match_id, rater_id)",
-            "CREATE TABLE IF NOT EXISTS pairs (id SERIAL PRIMARY KEY, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "CREATE TABLE IF NOT EXISTS push_log (id SERIAL PRIMARY KEY, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS reminded_at TEXT",
-            "CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist) WHERE status = 'active'",
-            "CREATE TABLE IF NOT EXISTS pending_pushes (id SERIAL PRIMARY KEY, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-        ]:
-            try: c.execute(stmt)
-            except: pass
+        c.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
     else:
-        c.execute('''CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_type TEXT, time_info TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, way_point TEXT, p_count TEXT, fee TEXT, flexible TEXT, prefs TEXT, line_id TEXT DEFAULT '', status TEXT DEFAULT 'active', expires_at TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS user_state (user_id TEXT PRIMARY KEY, current_type TEXT, temp_time TEXT, s_city TEXT, s_dist TEXT, e_city TEXT, e_dist TEXT, temp_way TEXT, temp_count TEXT, temp_fee TEXT, temp_flex TEXT, temp_prefs TEXT, temp_line_id TEXT, step TEXT, agreed_terms INTEGER DEFAULT 0)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, rater_id TEXT, ratee_id TEXT, match_id INTEGER, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid_a TEXT, match_id_a INTEGER, uid_b TEXT, match_id_b INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS blocked_users (user_id TEXT PRIMARY KEY, reason TEXT, blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS push_log (id INTEGER PRIMARY KEY AUTOINCREMENT, month_key TEXT, sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS pending_pushes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        try: c.execute('ALTER TABLE matches ADD COLUMN reminded_at TEXT')
-        except: pass
-        try: c.execute('CREATE UNIQUE INDEX IF NOT EXISTS matches_no_dup ON matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist)')
-        except: pass
-        for col in ["line_id TEXT DEFAULT ''", "status TEXT DEFAULT 'active'", "expires_at TEXT", "view_count INTEGER DEFAULT 0"]:
-            try: c.execute(f'ALTER TABLE matches ADD COLUMN {col}')
-            except: pass
-        try: c.execute('ALTER TABLE user_state ADD COLUMN temp_line_id TEXT')
-        except: pass
-        try: c.execute('ALTER TABLE user_state ADD COLUMN temp_expire TEXT')
-        except: pass
-        try: c.execute('ALTER TABLE user_state ADD COLUMN agreed_terms INTEGER DEFAULT 0')
-        except: pass
-        for col in ["rater_id TEXT", "ratee_id TEXT"]:
-            try: c.execute(f'ALTER TABLE ratings ADD COLUMN {col}')
-            except: pass
-        try: c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ratings_rater_match ON ratings(match_id, rater_id)')
-        except: pass
+        c.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
+    conn.commit()
+    # 讀取當前版本（無資料 = 0，全新 DB 或尚未版控）
+    row = c.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").fetchone()
+    current_version = row[0] if row else 0
+    if current_version >= SCHEMA_VERSION:
+        conn.close()
+        return
+    # 只跑比當前版本新的遷移
+    for ver, pg_sql, sqlite_sql in SCHEMA_MIGRATIONS:
+        if ver <= current_version:
+            continue
+        sql = pg_sql if USE_PG else (sqlite_sql if sqlite_sql is not None else pg_sql)
+        try:
+            c.execute(sql)
+            conn.commit()
+        except Exception as e:
+            logging.warning(f"Migration v{ver} skipped: {e}")
+            try:
+                if USE_PG:
+                    conn._conn.rollback()  # 清除 aborted transaction state
+            except:
+                pass
+    # 更新版本號
+    if USE_PG:
+        c.execute("DELETE FROM schema_version")
+        c.execute("INSERT INTO schema_version (version) VALUES (%s)", (SCHEMA_VERSION,))
+    else:
+        c.execute("DELETE FROM schema_version")
+        c.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
     conn.commit()
     conn.close()
 
