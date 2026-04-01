@@ -407,6 +407,190 @@ def safe_push(user_id, messages):
         except Exception as pe:
             logging.error(f"Failed to save pending push: {pe}")
 
+# --- 4. Dauding 貼文解析 ---
+# 支援格式：Dauding 共乘平台的標準發文格式
+_CITY_ALIAS = {
+    "臺北市": "台北市", "臺中市": "台中市", "臺南市": "台南市", "臺東縣": "台東縣",
+    "台北": "台北市", "新北": "新北市", "桃園": "桃園市", "新竹": "新竹市",
+    "台中": "台中市", "彰化": "彰化縣", "南投": "南投縣", "雲林": "雲林縣",
+    "嘉義": "嘉義市", "台南": "台南市", "高雄": "高雄市", "屏東": "屏東縣",
+    "宜蘭": "宜蘭縣", "花蓮": "花蓮縣", "台東": "台東縣", "基隆": "基隆市",
+    "苗栗": "苗栗縣",
+}
+
+def _normalize_city(raw):
+    raw = raw.strip().lstrip("#")
+    return _CITY_ALIAS.get(raw, raw)
+
+def parse_dauding(text):
+    """
+    解析 Dauding 共乘貼文，回傳 dict 或 None（格式不符）。
+    回傳欄位：user_type, p_count, s_city, e_city, way_point,
+              fee, prefs, pickup, dropoff, time_range_start, time_range_end
+    """
+    lines = text.strip().splitlines()
+    result = {}
+
+    # 判斷是提供還是徵求
+    first = lines[0] if lines else ""
+    if "徵求" in first or "搭" in first:
+        result["user_type"] = "seeker"
+    elif "提供" in first or "載" in first or "開車" in first:
+        result["user_type"] = "driver"
+    else:
+        return None  # 無法判斷身份 → 不是 Dauding 格式
+
+    # 人數
+    m = re.search(r'人數(\d+)', first) or re.search(r'(\d+)\s*位', first) or re.search(r'最多\s*(\d+)', first)
+    result["p_count"] = m.group(1) if m else "1"
+
+    for line in lines:
+        line = line.strip()
+
+        # 時間
+        if "共乘時間" in line or "時間" in line:
+            # 抓日期
+            dm = re.search(r'(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})', line)
+            # 抓時間範圍
+            tm = re.search(r'(\d{3,4})\s*[-~～]\s*(\d{3,4})', line)
+            if dm:
+                y, mo, d = dm.group(1), dm.group(2).zfill(2), dm.group(3).zfill(2)
+                if tm:
+                    def _fmt(t):
+                        t = t.zfill(4)
+                        return f"{t[:2]}:{t[2:]}"
+                    result["time_range_start"] = f"{y}-{mo}-{d}T{_fmt(tm.group(1))}"
+                    result["time_range_end"]   = f"{y}-{mo}-{d}T{_fmt(tm.group(2))}"
+                else:
+                    result["time_range_start"] = f"{y}-{mo}-{d}T00:00"
+                    result["time_range_end"]   = None
+
+        # 路線
+        elif "行程路線" in line or "路線" in line:
+            rm = re.search(r'[#＃]?([^\s#＃=＝>➔→]+)\s*[=＝>➔→]+\s*[#＃]?([^\s#＃/(（]+)', line)
+            if rm:
+                result["s_city"] = _normalize_city(rm.group(1))
+                result["e_city"] = _normalize_city(rm.group(2))
+
+        # 上車地點
+        elif "上車" in line and "是否" not in line:
+            m2 = re.search(r'[：:]\s*[#＃]?(.+?)(?:\s*/|$)', line)
+            if m2:
+                val = m2.group(1).strip().lstrip("#＃")
+                if val and val != "自輸入":
+                    result["pickup"] = val
+
+        # 下車地點
+        elif "下車" in line and "是否" not in line:
+            m2 = re.search(r'[：:]\s*[#＃]?(.+?)(?:\s*/|$)', line)
+            if m2:
+                val = m2.group(1).strip().lstrip("#＃")
+                if val and val != "自輸入":
+                    result["dropoff"] = val
+
+        # 中途
+        elif "中途" in line:
+            if re.search(r'[：:]\s*是|接受', line):
+                result["way_point_type"] = "接受中途"
+            else:
+                result["way_point_type"] = "僅限起迄"
+
+        # 費用
+        elif "費用" in line or "分攤" in line or "收費" in line:
+            m2 = re.search(r'[：:]\s*[#＃]?(.+?)(?:\s*/|$)', line)
+            if m2:
+                val = m2.group(1).strip().lstrip("#＃")
+                if val and val != "自輸入":
+                    result["fee"] = val
+
+    # way_point 組合（中途類型 + 上下車地點）
+    wtype = result.pop("way_point_type", "接受中途")
+    pickup  = result.pop("pickup", "")
+    dropoff = result.pop("dropoff", "")
+    wp_parts = [wtype]
+    if pickup:  wp_parts.append(f"上車:{pickup}")
+    if dropoff: wp_parts.append(f"下車:{dropoff}")
+    result["way_point"] = "|".join(wp_parts)
+
+    # 必填欄位檢查
+    if not result.get("s_city") or not result.get("e_city"):
+        return None
+
+    return result
+
+
+def get_dauding_confirm_flex(parsed, uid):
+    """Dauding 解析後的確認卡片，讓使用者選時間後一鍵發布"""
+    ut = parsed.get("user_type", "driver")
+    main_color = "#00b900" if ut == "driver" else "#1e90ff"
+    role_text = "載客/貨（提供座位）" if ut == "driver" else "搭車/寄物（徵求座位）"
+    sc = parsed.get("s_city", "")
+    ec = parsed.get("e_city", "")
+    pc = parsed.get("p_count", "1")
+    fee = parsed.get("fee", "（待填寫）")
+    wp = parsed.get("way_point", "接受中途")
+    tr_start = parsed.get("time_range_start", "")
+    tr_end   = parsed.get("time_range_end", "")
+
+    # 顯示用時間文字
+    if tr_start and tr_end:
+        time_display = f"{tr_start[5:10].replace('-','/')} {tr_start[11:]} ～ {tr_end[11:]}"
+    elif tr_start:
+        time_display = f"{tr_start[5:10].replace('-','/')} {tr_start[11:]}"
+    else:
+        time_display = "（請選擇）"
+
+    # way_point 顯示
+    wp_parts = wp.split("|")
+    wp_display = wp_parts[0]
+    if len(wp_parts) > 1:
+        wp_display += "  " + "  ".join(wp_parts[1:])
+
+    # 存 parsed 資料供後續 postback 取用（序列化成 json 存 user_state）
+    import json as _json
+    parsed_json = _json.dumps(parsed, ensure_ascii=False)
+
+    bubble = {
+        "type": "bubble",
+        "header": {"type": "box", "layout": "vertical", "backgroundColor": main_color,
+            "contents": [
+                {"type": "text", "text": "📋 從 Dauding 匯入行程", "weight": "bold", "color": "#FFFFFF", "size": "sm"},
+                {"type": "text", "text": "確認以下資訊，選好時間後發布", "color": "#FFFFFFBB", "size": "xs", "margin": "xs"}
+            ]},
+        "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                {"type": "text", "text": "身份", "color": "#aaaaaa", "size": "sm", "flex": 2},
+                {"type": "text", "text": role_text, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 2},
+                {"type": "text", "text": f"{sc} ➔ {ec}", "color": "#333333", "size": "sm", "flex": 5}]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 2},
+                {"type": "text", "text": time_display, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 2},
+                {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 5}]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 2},
+                {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
+            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                {"type": "text", "text": "中途", "color": "#aaaaaa", "size": "sm", "flex": 2},
+                {"type": "text", "text": wp_display, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
+            {"type": "text", "text": "⚠️ 系統只比對縣市，精確地點顯示在配對通知供對方參考", "size": "xxs", "color": "#aaaaaa", "margin": "md", "wrap": True}
+        ]},
+        "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+            {"type": "button", "style": "primary", "height": "sm", "color": main_color,
+             "action": {"type": "datetimepicker", "label": "🕒 選擇出發時間後發布",
+                        "data": f"action=dauding_publish&parsed={quote(parsed_json, safe='')}",
+                        "mode": "datetime",
+                        "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}},
+            {"type": "button", "style": "link", "height": "sm", "color": "#999999",
+             "action": {"type": "message", "label": "✖ 取消，自行填寫", "text": "我要載客/貨" if ut == "driver" else "我要搭車/寄物"}}
+        ]}
+    }
+    return FlexSendMessage(alt_text="從 Dauding 匯入行程確認", contents=bubble)
+
+
 # --- 4. Flex 卡片建構 ---
 def get_publish_confirm_flex(res_data, match_id):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res_data
@@ -803,34 +987,46 @@ def get_rules_flex():
     return FlexSendMessage(alt_text="媒合規則說明", contents=bubble)
 
 # --- 被動媒合推播 Flex 卡片 ---
-def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id):
+def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=""):
     prefs_text = prefs.strip().rstrip(",") if prefs else "（未設定）"
     contact_contents = [{"type": "text", "text": "有人發布了與您同向的行程！", "size": "xs", "color": "#888888", "align": "center"}]
     if line_id:
         contact_contents.append({"type": "button", "style": "primary", "height": "sm", "color": "#00b900", "margin": "sm",
             "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{line_id}"}})
+
+    # 解析 way_point 取上下車地點（格式：接受中途|上車:XXX|下車:YYY）
+    body_contents = [
+        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": tt.replace("T", " "), "color": "#333333", "size": "sm", "flex": 4}]},
+        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": fe, "color": "#333333", "size": "sm", "flex": 4}]},
+        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
+    ]
+    if way_point:
+        wp_parts = way_point.split("|")
+        for part in wp_parts[1:]:  # 跳過第一段「接受中途/僅限起迄」
+            if ":" in part:
+                label, val = part.split(":", 1)
+                body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                    {"type": "text", "text": label, "color": "#aaaaaa", "size": "sm", "flex": 1},
+                    {"type": "text", "text": val, "color": "#555555", "size": "sm", "flex": 4, "wrap": True}]})
+    body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+        {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
+        {"type": "text", "text": prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]})
+
     bubble = {
         "type": "bubble",
         "header": {"type": "box", "layout": "vertical",
             "contents": [{"type": "text", "text": "🔔 新的順路配對！", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
             "backgroundColor": "#1D9E75"},
-        "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                {"type": "text", "text": tt.replace("T", " "), "color": "#333333", "size": "sm", "flex": 4}]},
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                {"type": "text", "text": fe, "color": "#333333", "size": "sm", "flex": 4}]},
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                {"type": "text", "text": prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]}
-        ]},
+        "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_contents},
         "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": contact_contents}
     }
     return FlexSendMessage(alt_text="🔔 新的順路配對！", contents=bubble)
@@ -942,7 +1138,7 @@ def do_publish(uid, reply_token):
                 pair_conn.close()
             # 被動推播：通知既有配對者（含發布者的 LINE ID），尊重對方通知設定
             if is_notify_enabled(m[0]):
-                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid))
+                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy))
 
         rating_conn.close()
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
@@ -1375,6 +1571,60 @@ def handle_postback(event):
             finally:
                 conn.close()
             safe_reply(event.reply_token, TextSendMessage(text="請直接輸入你的 LINE ID（如 @abc123），我們會立即傳給對方："))
+
+        elif data.startswith("action=dauding_publish"):
+            import json as _json
+            from urllib.parse import unquote
+            params = dict(parse_qsl(data))
+            parsed_json = unquote(params.get("parsed", "{}"))
+            t = event.postback.params.get('datetime', '')
+            if not t or t < datetime.now().strftime("%Y-%m-%dT%H:%M"):
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ 出發時間不能是過去，請重新選擇：",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=DatetimePickerAction(label="🕒 重新選擇", data=data, mode="datetime"))
+                    ])
+                ))
+                return
+            try:
+                parsed = _json.loads(parsed_json)
+            except:
+                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 匯入資料解析失敗，請重新貼上 Dauding 行程。"))
+                return
+            ut   = parsed.get("user_type", "driver")
+            sc   = parsed.get("s_city", "")
+            ec   = parsed.get("e_city", "")
+            pc   = parsed.get("p_count", "1")
+            fee  = parsed.get("fee", "面議")
+            wp   = parsed.get("way_point", "接受中途")
+            # 寫入 user_state 再呼叫 do_publish
+            conn = get_db()
+            try:
+                # 用預設區（第一個區）補齊 s_dist / e_dist
+                s_dist = (DISTRICT_DATA.get(sc) or [""])[0]
+                e_dist = (DISTRICT_DATA.get(ec) or [""])[0]
+                if USE_PG:
+                    conn.execute(q('''INSERT INTO user_state
+                        (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist,
+                         temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, step, agreed_terms)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                        current_type=EXCLUDED.current_type, temp_time=EXCLUDED.temp_time,
+                        s_city=EXCLUDED.s_city, s_dist=EXCLUDED.s_dist,
+                        e_city=EXCLUDED.e_city, e_dist=EXCLUDED.e_dist,
+                        temp_way=EXCLUDED.temp_way, temp_count=EXCLUDED.temp_count,
+                        temp_fee=EXCLUDED.temp_fee, temp_flex=EXCLUDED.temp_flex,
+                        temp_prefs=EXCLUDED.temp_prefs, temp_line_id=EXCLUDED.temp_line_id,
+                        step=EXCLUDED.step'''),
+                        (uid, ut, t, sc, s_dist, ec, e_dist, wp, pc, fee, "不彈性", "", "", "WAIT_LINE_ID"))
+                else:
+                    conn.execute('INSERT OR REPLACE INTO user_state (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, step, agreed_terms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)',
+                        (uid, ut, t, sc, s_dist, ec, e_dist, wp, pc, fee, "不彈性", "", "", "WAIT_LINE_ID"))
+                conn.commit()
+            finally:
+                conn.close()
+            do_publish(uid, event.reply_token)
+
     except Exception as e:
         logging.error(f"Postback error for {uid}: {e}")
         safe_reply(event.reply_token, TextSendMessage(text="⚠️ 操作發生錯誤，請重新嘗試。"))
@@ -1410,6 +1660,13 @@ def handle_message(event):
     if not _state or not _state[0]:
         safe_reply(event.reply_token, get_terms_flex())
         return
+
+    # --- Dauding 貼文匯入偵測（在一般指令之前）---
+    if len(msg) > 30 and ("共乘時間" in msg or "行程路線" in msg or "徵求座位" in msg or "提供座位" in msg):
+        parsed = parse_dauding(msg)
+        if parsed:
+            safe_reply(event.reply_token, get_dauding_confirm_flex(parsed, uid))
+            return
 
     # --- 補送失敗推播（每用戶最多每 60 秒觸發一次，避免拖慢回應）---
     if time.time() - _flush_last.get(uid, 0) > 60:
