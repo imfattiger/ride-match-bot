@@ -1255,6 +1255,68 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
 def index():
     return "Bot is running!"
 
+@app.route("/about", methods=['GET'])
+def about():
+    return """<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sun car 順咖媒合</title>
+<style>
+  body{font-family:'Noto Sans TC',sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#333;line-height:1.8}
+  h1{color:#2c7a4b;font-size:1.8em;margin-bottom:4px}
+  h2{color:#2c7a4b;font-size:1.1em;margin-top:32px;border-bottom:2px solid #d4edda;padding-bottom:4px}
+  .subtitle{color:#666;margin-top:0;margin-bottom:28px}
+  .btn{display:inline-block;background:#06c755;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:8px}
+  ul{padding-left:20px}
+  li{margin-bottom:6px}
+  .note{font-size:0.88em;color:#888;margin-top:40px;border-top:1px solid #eee;padding-top:16px}
+</style>
+</head>
+<body>
+<h1>sun car 順咖媒合</h1>
+<p class="subtitle">共乘・帶貨・順路媒合，省錢又環保</p>
+
+<p>sun car 順咖媒合 是一個台灣在地的 P2P 共乘媒合服務。<br>
+透過 LINE Bot 自動配對同向行程，讓有空位的司機和需要搭車的乘客找到彼此。</p>
+
+<h2>適合誰使用</h2>
+<p>🚗 <strong>司機／貨主</strong>：長途開車有空位，順路帶人或帶貨，分攤油資過路費。<br>
+🙋 <strong>乘客／寄物方</strong>：需要搭車或寄送物品，找順路的人幫忙，比計程車便宜。</p>
+
+<h2>如何使用</h2>
+<ol>
+<li>加入 LINE 官方帳號</li>
+<li>同意使用條款</li>
+<li>選擇身份發布行程</li>
+<li>系統自動配對，有結果主動通知</li>
+</ol>
+
+<h2>服務特色</h2>
+<ul>
+<li>自動方向配對，北→南只配北→南</li>
+<li>時間彈性搜尋（前後 1～4 小時）</li>
+<li>支援中途上下車</li>
+<li>支援順路帶貨／寄物</li>
+<li>配對成功後互評系統</li>
+</ul>
+
+<h2>開始使用</h2>
+<p>LINE 官方帳號：<strong>@321nmofi</strong></p>
+<a class="btn" href="https://line.me/R/ti/p/@321nmofi">加入 LINE Bot</a>
+<p style="margin-top:12px;color:#666">或在 LINE 搜尋：<strong>sun car 順咖媒合</strong></p>
+
+<h2>聯絡</h2>
+<p>使用上有任何問題，請在 LINE Bot 內輸入「回報問題」。</p>
+
+<div class="note">
+<strong>免責聲明</strong><br>
+本平台為資訊媒合服務，非汽車運輸業者。使用者之間的共乘行為由雙方自行負責。詳細條款請於 LINE Bot 內查閱。
+</div>
+</body>
+</html>""", 200, {'Content-Type': 'text/html; charset=utf-8'}
+
 @app.route("/ping", methods=['GET'])
 def ping():
     """輕量 keep-alive endpoint，給 UptimeRobot / 外部監控用"""
