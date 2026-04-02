@@ -28,13 +28,33 @@ Everything lives in `app.py`. Key sections in order:
 8. **`handle_postback`** — time picker, delete, complete (→ mutual rating prompt), rate, cancel, report, agree_terms
 9. **`handle_message`** — terms gate → blocked gate → full publish state machine + all text commands
 
+## Debugging Priorities
+
+When something breaks, always check in this order — skipping layers causes wasted rounds:
+
+1. **Webhook URL** — must be `https://<your-render-url>/callback` (POST only); `/ping` for health monitors
+2. **psycopg2 cursor usage** — `conn.execute()` works only on the `_PGWrapper` wrapper; raw `conn.cursor().execute()` returns `None` (DBAPI2 spec), so **never chain `.fetchone()` directly after `.execute()` on a raw cursor**
+3. **Connection pool** — Render free tier caps at 5 connections; every `get_db()` must have a matching `conn.close()` in `finally`
+4. **Render cold-start** — free tier sleeps after 15 min inactivity; first request takes ~10s; not a bug
+5. **App logic** — only after all above are ruled out
+
+Recent incidents:
+- `'NoneType' object has no attribute 'fetchone'` — raw psycopg2 cursor `.execute()` returns `None`; fix: split execute + fetchone onto two lines
+- UptimeRobot all-red — monitor was pointing at `/callback` (POST-only); fix: change to `/ping`
+
 ## Database
 
 Two modes detected by `USE_PG = bool(os.getenv('DATABASE_URL'))`:
 - **SQLite** (local dev): `ridematch_v15.db`, `?` placeholders, `INSERT OR REPLACE / OR IGNORE`, `cursor.lastrowid`
 - **PostgreSQL** (Render): `%s` placeholders via `q()` helper, `ON CONFLICT DO UPDATE`, `RETURNING id`
 
-All schema changes must be applied in **both** the `CREATE TABLE` block and the migration list inside `init_db()`.
+All schema changes must be applied by **appending a new entry to `SCHEMA_MIGRATIONS`** (not editing existing entries). `init_db()` tracks applied versions via `schema_version` table and skips already-applied migrations.
+
+**psycopg2 vs SQLite API differences** (common gotchas):
+- Placeholders: SQLite uses `?`, PostgreSQL uses `%s` — always use `q(sql)` helper to auto-convert
+- `INSERT OR REPLACE` / `INSERT OR IGNORE` → PostgreSQL: `ON CONFLICT DO UPDATE` / `ON CONFLICT DO NOTHING`
+- `cursor.lastrowid` → PostgreSQL: `RETURNING id` + `cursor.fetchone()[0]`
+- `connection.execute()` → works on `_PGWrapper` but NOT on raw psycopg2 connection; always call `conn.cursor()` explicitly when chaining `.fetchone()`
 
 Tables:
 - `matches` — trips (user_id, user_type driver/seeker, time_info, s/e city/dist, fee, status active/completed/cancelled, expires_at)
@@ -87,3 +107,22 @@ Uses **`line-bot-sdk==2.x`** (NOT v3). Imports are from `linebot` not `linebot.v
 - Same-city direction is detected by `sc == ec`, not weight equality (weights can collide, e.g. 新竹市/新竹縣)
 - `get_district_cluster()` fallback returns `city` (not `dist`) for cities without DISTRICT_GROUPS entries
 - Active trip limit is 3 per user, enforced in `do_publish()` before the duplicate-check
+## Claude Code Working Rules
+
+### Validation — never report done without verifying
+After editing any Python file, re-read the changed function to confirm the edit landed correctly. Do not say "Done" or "fixed" based on memory alone.
+
+### Large file reading — app.py is a single large file
+`app.py` exceeds 500 lines. Always read in segments using `offset` + `limit`. Never assume you've seen the whole file from a single read. Re-read the target section immediately before making changes.
+
+### Search results may be truncated
+If a grep/search returns suspiciously few results, narrow the query and search again. Tool output over 50K chars gets silently truncated.
+
+### Schema changes — append only
+Never edit existing entries in `SCHEMA_MIGRATIONS`. Always append a new migration entry. Query table schema before assuming any column exists.
+
+### After long conversations — re-read before editing
+Re-read the relevant section of `app.py` before making any edit. Context compression may have silently dropped earlier reads.
+
+### Verification mindset
+After implementing any feature, re-read the changed code and actively look for edge cases that would break it before reporting complete.

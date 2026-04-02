@@ -1662,9 +1662,9 @@ def handle_postback(event):
             # 寫入 user_state 再呼叫 do_publish
             conn = get_db()
             try:
-                # 用預設區（第一個區）補齊 s_dist / e_dist
-                s_dist = (DISTRICT_DATA.get(sc) or [""])[0]
-                e_dist = (DISTRICT_DATA.get(ec) or [""])[0]
+                # Dauding 匯入不知道確切行政區，留空讓 matching 只比對縣市
+                s_dist = ""
+                e_dist = ""
                 if USE_PG:
                     conn.execute(q('''INSERT INTO user_state
                         (user_id, current_type, temp_time, s_city, s_dist, e_city, e_dist,
@@ -2127,8 +2127,29 @@ def handle_message(event):
 
 
     # --- 管理員指令 ---
-    elif msg == "/quota" and uid == ADMIN_LINE_ID:
+    elif msg in ["/stats", "/quota"] and uid == ADMIN_LINE_ID:
         month_key = datetime.now().strftime("%Y-%m")
+        today = datetime.now().strftime("%Y-%m-%d")
+        try:
+            sc = get_db()
+            try:
+                total_active = sc.execute(q("SELECT COUNT(*) FROM matches WHERE status = 'active'")).fetchone()[0]
+                total_completed = sc.execute(q("SELECT COUNT(*) FROM matches WHERE status = 'completed'")).fetchone()[0]
+                if USE_PG:
+                    today_new = sc.execute(q("SELECT COUNT(*) FROM matches WHERE created_at::text LIKE ?"), (f"{today}%",)).fetchone()[0]
+                else:
+                    today_new = sc.execute("SELECT COUNT(*) FROM matches WHERE created_at LIKE ?", (f"{today}%",)).fetchone()[0]
+                total_users = sc.execute(q("SELECT COUNT(*) FROM user_state WHERE agreed_terms = 1")).fetchone()[0]
+                total_blocked = sc.execute(q("SELECT COUNT(*) FROM blocked_users")).fetchone()[0]
+                total_ratings = sc.execute(q("SELECT COUNT(*) FROM ratings")).fetchone()[0]
+                avg_row = sc.execute(q("SELECT AVG(score) FROM ratings")).fetchone()
+                avg_score = round(float(avg_row[0]), 1) if avg_row and avg_row[0] else 0
+                pending_cnt = sc.execute(q("SELECT COUNT(*) FROM pending_pushes")).fetchone()[0]
+            finally:
+                sc.close()
+        except Exception as e:
+            safe_reply(event.reply_token, TextSendMessage(text=f"⚠️ 無法取得統計資料：{e}"))
+            return
         try:
             resp = requests.get(
                 "https://api.line.me/v2/bot/message/quota/consumption",
@@ -2136,11 +2157,26 @@ def handle_message(event):
                 timeout=5
             )
             used = resp.json().get("totalUsage", 0)
-            safe_reply(event.reply_token, TextSendMessage(
-                text=f"📊 {month_key} LINE 推播用量\n已用：{used} / 200\n剩餘：{max(0, 200 - used)} 則"
-            ))
-        except Exception as e:
-            safe_reply(event.reply_token, TextSendMessage(text=f"⚠️ 無法取得 LINE 配額資訊：{e}"))
+            quota_text = f"已用 {used} / 200 則（剩 {max(0, 200 - used)}）"
+        except Exception:
+            quota_text = "無法取得"
+        safe_reply(event.reply_token, TextSendMessage(
+            text=(
+                f"📊 sun car 統計 {today}\n"
+                f"━━━━━━━━━━━━\n"
+                f"👤 同意條款用戶：{total_users} 人\n"
+                f"🚫 封鎖用戶：{total_blocked} 人\n"
+                f"━━━━━━━━━━━━\n"
+                f"🗓️ 今日新增行程：{today_new} 筆\n"
+                f"✅ 生效中行程：{total_active} 筆\n"
+                f"🏁 已完成行程：{total_completed} 筆\n"
+                f"━━━━━━━━━━━━\n"
+                f"⭐ 評分總數：{total_ratings} 筆（均分 {avg_score}）\n"
+                f"📬 待補送通知：{pending_cnt} 則\n"
+                f"━━━━━━━━━━━━\n"
+                f"📤 {month_key} 推播：{quota_text}"
+            )
+        ))
         return
 
     elif msg.startswith("/ban ") and uid == ADMIN_LINE_ID:
