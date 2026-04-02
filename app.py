@@ -1248,6 +1248,11 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
         final_matches.append(m)
 
     conn.close()
+    # 依出發時間與用戶時間的接近度排序，最近的配對優先
+    try:
+        final_matches.sort(key=lambda m: abs((datetime.strptime(m[1], "%Y-%m-%dT%H:%M") - base_t).total_seconds()))
+    except Exception:
+        pass
     return final_matches[:5]
 
 # --- 6. Flask 路由 ---
@@ -1687,6 +1692,31 @@ def handle_postback(event):
                 conn.close()
             do_publish(uid, event.reply_token)
 
+        elif data.startswith("action=extend"):
+            params = dict(parse_qsl(data))
+            match_id = params.get('id', '')
+            if not match_id:
+                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到行程編號。"))
+                return
+            conn = get_db()
+            try:
+                row = conn.execute(q("SELECT user_id, s_city, e_city, expires_at FROM matches WHERE id = ? AND status = 'active'"), (match_id,)).fetchone()
+                if not row or row[0] != uid:
+                    safe_reply(event.reply_token, TextSendMessage(text="⚠️ 只能延長自己的行程。"))
+                    return
+                _, sc, ec, old_exp = row
+                try:
+                    new_exp = (datetime.strptime(str(old_exp)[:16], "%Y-%m-%dT%H:%M") + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M")
+                except:
+                    new_exp = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M")
+                conn.execute(q("UPDATE matches SET expires_at = ?, reminded_at = NULL WHERE id = ?"), (new_exp, match_id))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"✅ 行程已延長 3 天！\n{sc} ➔ {ec}\n新下架時間：{new_exp[5:16]}"
+            ))
+
     except Exception as e:
         logging.error(f"Postback error for {uid}: {e}")
         safe_reply(event.reply_token, TextSendMessage(text="⚠️ 操作發生錯誤，請重新嘗試。"))
@@ -1775,7 +1805,7 @@ def handle_message(event):
         conn = get_db()
         try:
             my_matches = conn.execute(
-                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
+                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
                 (uid,)
             ).fetchall()
         finally:
@@ -1786,11 +1816,12 @@ def handle_message(event):
         else:
             bubbles = []
             for m in my_matches:
-                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc = m
+                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at = m
                 role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
                 hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
                 lid_text = f"@{lid}" if lid else "未設定"
                 vc_text = f"{vc or 0} 次"
+                exp_text = str(exp_at)[5:16] if exp_at else "未知"
                 bubbles.append({
                     "type": "bubble",
                     "header": {"type": "box", "layout": "vertical",
@@ -1812,6 +1843,9 @@ def handle_message(event):
                         {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                             {"type": "text", "text": "瀏覽", "color": "#aaaaaa", "size": "sm", "flex": 1},
                             {"type": "text", "text": vc_text, "color": "#888888", "size": "sm", "flex": 4}]},
+                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                            {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]},
                     ]},
                     "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                         {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
@@ -1989,14 +2023,16 @@ def handle_message(event):
 
     elif msg.startswith("找縣市:"):
         parts = msg.split(":")
-        if len(parts) == 5:
-            ftype, tfilter, city, sort = parts[1], parts[2], parts[3], parts[4]
+        if len(parts) == 6:
+            ftype, tfilter, city, sort, dir_filter = parts[1], parts[2], parts[3], parts[4], parts[5]
+        elif len(parts) == 5:
+            ftype, tfilter, city, sort, dir_filter = parts[1], parts[2], parts[3], parts[4], "any"
         elif len(parts) == 4:
-            ftype, tfilter, city, sort = parts[1], parts[2], parts[3], "time"
+            ftype, tfilter, city, sort, dir_filter = parts[1], parts[2], parts[3], "time", "any"
         elif len(parts) == 3:
-            ftype, city, tfilter, sort = parts[1], parts[2], "all", "time"
+            ftype, city, tfilter, sort, dir_filter = parts[1], parts[2], "all", "time", "any"
         else:
-            ftype, city, tfilter, sort = "all", parts[1], "all", "time"
+            ftype, city, tfilter, sort, dir_filter = "all", parts[1], "all", "time", "any"
 
         now_str = datetime.now().strftime("%Y-%m-%dT%H:%M")
         tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT00:00")
@@ -2014,42 +2050,58 @@ def handle_message(event):
         filter_labels = {"today": ("📌今天", "本週", "全部"), "week": ("今天", "📌本週", "全部")}.get(tfilter, ("今天", "本週", "📌全部"))
         sort_time_label = "📌 時間排序" if sort == "time" else "🕒 時間排序"
         sort_rating_label = "📌 評分優先" if sort == "rating" else "⭐ 評分優先"
+        dir_from_label = "📌 從此出發" if dir_filter == "from" else "🚀 從此出發"
+        dir_to_label = "📌 到此目的" if dir_filter == "to" else "🏁 到此目的"
+        dir_any_label = "📌 任意方向" if dir_filter == "any" else "🔀 任意方向"
         filter_qr = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}:{sort}")),
-            QuickReplyButton(action=MessageAction(label=filter_labels[1], text=f"找縣市:{ftype}:week:{city}:{sort}")),
-            QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}:{sort}")),
-            QuickReplyButton(action=MessageAction(label=sort_time_label, text=f"找縣市:{ftype}:{tfilter}:{city}:time")),
-            QuickReplyButton(action=MessageAction(label=sort_rating_label, text=f"找縣市:{ftype}:{tfilter}:{city}:rating")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}:{sort}:{dir_filter}")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[1], text=f"找縣市:{ftype}:week:{city}:{sort}:{dir_filter}")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}:{sort}:{dir_filter}")),
+            QuickReplyButton(action=MessageAction(label=sort_time_label, text=f"找縣市:{ftype}:{tfilter}:{city}:time:{dir_filter}")),
+            QuickReplyButton(action=MessageAction(label=sort_rating_label, text=f"找縣市:{ftype}:{tfilter}:{city}:rating:{dir_filter}")),
+            QuickReplyButton(action=MessageAction(label=dir_from_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:from")),
+            QuickReplyButton(action=MessageAction(label=dir_to_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:to")),
+            QuickReplyButton(action=MessageAction(label=dir_any_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:any")),
         ])
 
         conn = get_db()
         try:
-            base_cond = f"status = 'active' AND (s_city = ? OR e_city = ?){time_cond}"
+            if dir_filter == "from":
+                dir_cond = "s_city = ?"
+                dir_vals = [city]
+            elif dir_filter == "to":
+                dir_cond = "e_city = ?"
+                dir_vals = [city]
+            else:
+                dir_cond = "(s_city = ? OR e_city = ?)"
+                dir_vals = [city, city]
+            base_cond = f"status = 'active' AND {dir_cond}{time_cond}"
             if sort == "rating":
                 order_clause = "(SELECT COALESCE(AVG(score), 0) FROM ratings WHERE ratee_id = matches.user_id) DESC, time_info ASC"
             else:
                 order_clause = "time_info ASC"
             if ftype == "all":
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE {base_cond} ORDER BY {order_clause} LIMIT 10"
-                ), [city, city] + time_vals).fetchall()
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE {base_cond} ORDER BY {order_clause} LIMIT 10"
+                ), dir_vals + time_vals).fetchall()
             else:
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id FROM matches WHERE user_type = ? AND {base_cond} ORDER BY {order_clause} LIMIT 10"
-                ), [ftype, city, city] + time_vals).fetchall()
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE user_type = ? AND {base_cond} ORDER BY {order_clause} LIMIT 10"
+                ), [ftype] + dir_vals + time_vals).fetchall()
 
             if not rows:
                 label = {"driver": "司機", "seeker": "乘客"}.get(ftype, "")
                 time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "")
+                dir_hint = {"from": "（從此出發）", "to": "（到此目的）"}.get(dir_filter, "")
                 safe_reply(event.reply_token, TextSendMessage(
-                    text=f"📭 目前 {city} {time_hint}暫無{label}行程。\n換個時間範圍試試，或發布行程讓別人找到你！",
+                    text=f"📭 目前 {city}{dir_hint} {time_hint}暫無{label}行程。\n換個時間範圍或方向試試！",
                     quick_reply=filter_qr
                 ))
                 return
 
             bubbles = []
             for r in rows:
-                trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid = r
+                trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid, exp_at = r
                 avg, cnt = get_user_rating(conn, owner_uid)
                 rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
                 icon = "🚗" if utype == 'driver' else "🙋"
@@ -2082,6 +2134,7 @@ def handle_message(event):
                         {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
                          "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
                     ]
+                exp_text = str(exp_at)[5:16] if exp_at else "未知"
                 body_rows = [
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
@@ -2097,7 +2150,10 @@ def handle_message(event):
                         {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]}
+                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]}
                 ]
                 if is_own:
                     body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#aaaaaa", "align": "end"})
@@ -2119,8 +2175,9 @@ def handle_message(event):
             conn.close()
         time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "全部")
         sort_hint = "⭐ 評分優先" if sort == "rating" else "🕒 時間排序"
+        dir_hint = {"from": "從此出發", "to": "到此目的"}.get(dir_filter, "任意方向")
         safe_reply(event.reply_token, [
-            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{sort_hint}・{len(rows)} 筆）"),
+            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{sort_hint}・{dir_hint}・{len(rows)} 筆）"),
             FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles}, quick_reply=filter_qr)
         ])
         return
@@ -2177,6 +2234,38 @@ def handle_message(event):
                 f"📤 {month_key} 推播：{quota_text}"
             )
         ))
+        return
+
+    elif msg.startswith("/info ") and uid == ADMIN_LINE_ID:
+        target = msg[6:].strip()
+        conn = get_db()
+        try:
+            is_ban = conn.execute(q("SELECT 1 FROM blocked_users WHERE user_id = ?"), (target,)).fetchone()
+            state = conn.execute(q("SELECT step, agreed_terms, notify_on_match FROM user_state WHERE user_id = ?"), (target,)).fetchone()
+            trips = conn.execute(q(
+                "SELECT id, user_type, time_info, s_city, e_city, status FROM matches WHERE user_id = ? ORDER BY created_at DESC LIMIT 5"
+            ), (target,)).fetchall()
+            avg, cnt = get_user_rating(conn, target)
+        finally:
+            conn.close()
+        lines = [f"🔍 用戶資訊：{target[:16]}..."]
+        if is_ban:
+            lines.append("🚫 狀態：已封鎖")
+        else:
+            lines.append("✅ 狀態：正常")
+        if state:
+            lines.append(f"📋 同意條款：{'是' if state[1] else '否'}  通知：{'開' if state[2] else '關'}")
+        lines.append(f"⭐ 評分：{avg}（{cnt}筆）" if avg else "⭐ 評分：暫無")
+        lines.append(f"━━ 近期行程（最多5筆）")
+        if trips:
+            for t in trips:
+                t_id, utype, tinfo, sc, ec, status = t
+                role = "🚗" if utype == "driver" else "🙋"
+                lines.append(f"{role} #{t_id} {tinfo[5:16]} {sc}→{ec} [{status}]")
+        else:
+            lines.append("（無行程記錄）")
+        lines.append(f"\n/ban {target}")
+        safe_reply(event.reply_token, TextSendMessage(text="\n".join(lines)))
         return
 
     elif msg.startswith("/ban ") and uid == ADMIN_LINE_ID:
@@ -2559,9 +2648,21 @@ def reminder_thread():
                 ), (remind_from, remind_to)).fetchall()
                 for trip in trips:
                     trip_id, user_id, sc, ec, exp_at = trip
-                    safe_push(user_id, TextSendMessage(
-                        text=f"⏰ 行程即將下架提醒\n\n{sc} ➔ {ec} 的行程將於 {exp_at[5:16]} 自動下架。\n\n若想延長，請輸入「我的行程」刪除後重新發布。"
-                    ))
+                    remind_flex = {
+                        "type": "bubble",
+                        "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "⏰ 行程即將下架", "weight": "bold", "size": "md"},
+                            {"type": "text", "text": f"{sc} ➔ {ec}", "size": "sm", "color": "#555555"},
+                            {"type": "text", "text": f"下架時間：{str(exp_at)[5:16]}", "size": "sm", "color": "#e07b00"},
+                        ]},
+                        "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                            {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                             "action": {"type": "postback", "label": "📅 延長 3 天", "data": f"action=extend&id={trip_id}"}},
+                            {"type": "button", "style": "secondary", "height": "sm",
+                             "action": {"type": "postback", "label": "🗑️ 刪除行程", "data": f"action=delete&id={trip_id}"}}
+                        ]}
+                    }
+                    safe_push(user_id, FlexSendMessage(alt_text=f"⏰ {sc}→{ec} 行程即將下架", contents=remind_flex))
                     conn.execute(q("UPDATE matches SET reminded_at = ? WHERE id = ?"), (remind_from, trip_id))
                 conn.commit()
             finally:
