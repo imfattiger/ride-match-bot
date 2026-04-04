@@ -334,6 +334,11 @@ def clean_expired_matches():
         try:
             now = datetime.now().strftime("%Y-%m-%dT%H:%M")
             conn.execute(q("DELETE FROM matches WHERE status = 'active' AND (expires_at < ? OR time_info < ?)"), (now, now))
+            # 清除超過 7 天的 pending_pushes（對方已取消訂閱或長期未互動）
+            if USE_PG:
+                conn.execute(q("DELETE FROM pending_pushes WHERE created_at < NOW() - INTERVAL '7 days'"))
+            else:
+                conn.execute("DELETE FROM pending_pushes WHERE created_at < datetime('now', '-7 days')")
             conn.commit()
         finally:
             conn.close()
@@ -2023,16 +2028,20 @@ def handle_message(event):
 
     elif msg.startswith("找縣市:"):
         parts = msg.split(":")
-        if len(parts) == 6:
-            ftype, tfilter, city, sort, dir_filter = parts[1], parts[2], parts[3], parts[4], parts[5]
+        if len(parts) == 7:
+            ftype, tfilter, city, sort, dir_filter, pg = parts[1], parts[2], parts[3], parts[4], parts[5], int(parts[6])
+        elif len(parts) == 6:
+            ftype, tfilter, city, sort, dir_filter, pg = parts[1], parts[2], parts[3], parts[4], parts[5], 0
         elif len(parts) == 5:
-            ftype, tfilter, city, sort, dir_filter = parts[1], parts[2], parts[3], parts[4], "any"
+            ftype, tfilter, city, sort, dir_filter, pg = parts[1], parts[2], parts[3], parts[4], "any", 0
         elif len(parts) == 4:
-            ftype, tfilter, city, sort, dir_filter = parts[1], parts[2], parts[3], "time", "any"
+            ftype, tfilter, city, sort, dir_filter, pg = parts[1], parts[2], parts[3], "time", "any", 0
         elif len(parts) == 3:
-            ftype, city, tfilter, sort, dir_filter = parts[1], parts[2], "all", "time", "any"
+            ftype, city, tfilter, sort, dir_filter, pg = parts[1], parts[2], "all", "time", "any", 0
         else:
-            ftype, city, tfilter, sort, dir_filter = "all", parts[1], "all", "time", "any"
+            ftype, city, tfilter, sort, dir_filter, pg = "all", parts[1], "all", "time", "any", 0
+        page_size = 10
+        offset = pg * page_size
 
         now_str = datetime.now().strftime("%Y-%m-%dT%H:%M")
         tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT00:00")
@@ -2053,16 +2062,18 @@ def handle_message(event):
         dir_from_label = "📌 從此出發" if dir_filter == "from" else "🚀 從此出發"
         dir_to_label = "📌 到此目的" if dir_filter == "to" else "🏁 到此目的"
         dir_any_label = "📌 任意方向" if dir_filter == "any" else "🔀 任意方向"
-        filter_qr = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}:{sort}:{dir_filter}")),
-            QuickReplyButton(action=MessageAction(label=filter_labels[1], text=f"找縣市:{ftype}:week:{city}:{sort}:{dir_filter}")),
-            QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}:{sort}:{dir_filter}")),
-            QuickReplyButton(action=MessageAction(label=sort_time_label, text=f"找縣市:{ftype}:{tfilter}:{city}:time:{dir_filter}")),
-            QuickReplyButton(action=MessageAction(label=sort_rating_label, text=f"找縣市:{ftype}:{tfilter}:{city}:rating:{dir_filter}")),
-            QuickReplyButton(action=MessageAction(label=dir_from_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:from")),
-            QuickReplyButton(action=MessageAction(label=dir_to_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:to")),
-            QuickReplyButton(action=MessageAction(label=dir_any_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:any")),
-        ])
+        _base = f"找縣市:{ftype}:{tfilter}:{city}:{sort}:{dir_filter}"
+        qr_items = [
+            QuickReplyButton(action=MessageAction(label=filter_labels[0], text=f"找縣市:{ftype}:today:{city}:{sort}:{dir_filter}:0")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[1], text=f"找縣市:{ftype}:week:{city}:{sort}:{dir_filter}:0")),
+            QuickReplyButton(action=MessageAction(label=filter_labels[2], text=f"找縣市:{ftype}:all:{city}:{sort}:{dir_filter}:0")),
+            QuickReplyButton(action=MessageAction(label=sort_time_label, text=f"找縣市:{ftype}:{tfilter}:{city}:time:{dir_filter}:0")),
+            QuickReplyButton(action=MessageAction(label=sort_rating_label, text=f"找縣市:{ftype}:{tfilter}:{city}:rating:{dir_filter}:0")),
+            QuickReplyButton(action=MessageAction(label=dir_from_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:from:0")),
+            QuickReplyButton(action=MessageAction(label=dir_to_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:to:0")),
+            QuickReplyButton(action=MessageAction(label=dir_any_label, text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:any:0")),
+        ]
+        filter_qr = QuickReply(items=qr_items)
 
         conn = get_db()
         try:
@@ -2082,12 +2093,14 @@ def handle_message(event):
                 order_clause = "time_info ASC"
             if ftype == "all":
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE {base_cond} ORDER BY {order_clause} LIMIT 10"
-                ), dir_vals + time_vals).fetchall()
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE {base_cond} ORDER BY {order_clause} LIMIT ? OFFSET ?"
+                ), dir_vals + time_vals + [page_size + 1, offset]).fetchall()
             else:
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE user_type = ? AND {base_cond} ORDER BY {order_clause} LIMIT 10"
-                ), [ftype] + dir_vals + time_vals).fetchall()
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE user_type = ? AND {base_cond} ORDER BY {order_clause} LIMIT ? OFFSET ?"
+                ), [ftype] + dir_vals + time_vals + [page_size + 1, offset]).fetchall()
+            has_next = len(rows) > page_size
+            rows = rows[:page_size]
 
             if not rows:
                 label = {"driver": "司機", "seeker": "乘客"}.get(ftype, "")
@@ -2176,9 +2189,18 @@ def handle_message(event):
         time_hint = {"today": "今天", "week": "本週"}.get(tfilter, "全部")
         sort_hint = "⭐ 評分優先" if sort == "rating" else "🕒 時間排序"
         dir_hint = {"from": "從此出發", "to": "到此目的"}.get(dir_filter, "任意方向")
+        page_label = f"第 {pg + 1} 頁" if pg > 0 else ""
+        # 上下頁 QuickReply（附加在 filter_qr 前面）
+        page_items = []
+        if pg > 0:
+            page_items.append(QuickReplyButton(action=MessageAction(label="◀ 上一頁", text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:{dir_filter}:{pg - 1}")))
+        if has_next:
+            page_items.append(QuickReplyButton(action=MessageAction(label="下一頁 ▶", text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:{dir_filter}:{pg + 1}")))
+        paged_qr = QuickReply(items=page_items + qr_items) if page_items else filter_qr
+        header_text = f"📋 {city} 行程（{time_hint}・{sort_hint}・{dir_hint}{('・' + page_label) if page_label else ''}・{len(rows)} 筆）"
         safe_reply(event.reply_token, [
-            TextSendMessage(text=f"📋 {city} 行程（{time_hint}・{sort_hint}・{dir_hint}・{len(rows)} 筆）"),
-            FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles}, quick_reply=filter_qr)
+            TextSendMessage(text=header_text),
+            FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles}, quick_reply=paged_qr)
         ])
         return
 
