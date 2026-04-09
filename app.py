@@ -1880,6 +1880,8 @@ def handle_message(event):
                 q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at, vehicle_type, plate_no FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
                 (uid,)
             ).fetchall()
+            notify_on = conn.execute(q("SELECT notify_on_match FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+            notify_on = (notify_on[0] if notify_on and notify_on[0] is not None else 1) == 1
         finally:
             conn.close()
 
@@ -1889,6 +1891,14 @@ def handle_message(event):
             bubbles = []
             for m in my_matches:
                 m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at, vtype, pno = m
+                # 查配對次數
+                pair_conn = get_db()
+                try:
+                    pair_cnt = pair_conn.execute(q(
+                        "SELECT COUNT(*) FROM pairs WHERE match_id_a = ? OR match_id_b = ?"
+                    ), (m_id, m_id)).fetchone()[0]
+                finally:
+                    pair_conn.close()
                 role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
                 hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
                 lid_text = f"@{lid}" if lid else "未設定"
@@ -1911,6 +1921,9 @@ def handle_message(event):
                         {"type": "text", "text": "瀏覽", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": vc_text, "color": "#888888", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "配對", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{pair_cnt} 次", "color": "#1D9E75" if pair_cnt > 0 else "#888888", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]},
                 ]
@@ -1919,6 +1932,8 @@ def handle_message(event):
                     body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": veh_display, "color": "#333333", "size": "sm", "flex": 4}]})
+                notify_label = "🔕 關閉配對通知" if notify_on else "🔔 開啟配對通知"
+                notify_text = "關閉配對通知" if notify_on else "開啟配對通知"
                 bubbles.append({
                     "type": "bubble",
                     "header": {"type": "box", "layout": "vertical",
@@ -1933,7 +1948,9 @@ def handle_message(event):
                              "action": {"type": "postback", "label": "✏️ 改ID", "data": f"action=edit_line_id&id={m_id}"}},
                             {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                              "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
-                        ]}
+                        ]},
+                        {"type": "button", "style": "link", "height": "sm", "color": "#888888",
+                         "action": {"type": "message", "label": notify_label, "text": notify_text}},
                     ] + ([{"type": "button", "style": "secondary", "height": "sm",
                            "action": {"type": "postback", "label": "🚗 改車型/車牌", "data": f"action=edit_vehicle&id={m_id}"}}]
                          if utype == 'driver' else [])}
