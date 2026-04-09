@@ -228,6 +228,10 @@ SCHEMA_MIGRATIONS = [
      "CREATE TABLE IF NOT EXISTS pending_pushes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, message_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
     (20, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS notify_on_match INTEGER DEFAULT 1",
          "ALTER TABLE user_state ADD COLUMN notify_on_match INTEGER DEFAULT 1"),
+    (21, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS vehicle_type TEXT",
+         "ALTER TABLE matches ADD COLUMN vehicle_type TEXT"),
+    (22, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_vehicle TEXT",
+         "ALTER TABLE user_state ADD COLUMN temp_vehicle TEXT"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -992,7 +996,7 @@ def get_rules_flex():
     return FlexSendMessage(alt_text="媒合規則說明", contents=bubble)
 
 # --- 被動媒合推播 Flex 卡片 ---
-def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=""):
+def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type=""):
     prefs_text = prefs.strip().rstrip(",") if prefs else "（未設定）"
     contact_contents = [{"type": "text", "text": "有人發布了與您同向的行程！", "size": "xs", "color": "#888888", "align": "center"}]
     if line_id:
@@ -1014,6 +1018,10 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
             {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
             {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
     ]
+    if vehicle_type and vehicle_type != "其他":
+        body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": vehicle_type, "color": "#333333", "size": "sm", "flex": 4}]})
     if way_point:
         wp_parts = way_point.split("|")
         for part in wp_parts[1:]:  # 跳過第一段「接受中途/僅限起迄」
@@ -1040,12 +1048,13 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
 def do_publish(uid, reply_token):
     conn = get_db()
     try:
-        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire, temp_vehicle FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
         if not res:
             safe_reply(reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
-        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp = res
+        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp, vt = res
         lid = lid or ''
+        vt = vt or ''
         expire_days = int(exp) if exp else 3
         expires_at = (datetime.now() + timedelta(days=expire_days)).strftime("%Y-%m-%dT%H:%M")
 
@@ -1062,16 +1071,16 @@ def do_publish(uid, reply_token):
         # 防重複發布（原子性：唯一索引 + ON CONFLICT，避免競態條件）
         cursor = conn.cursor()
         if USE_PG:
-            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id'),
-                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
+            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id'),
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt))
             row = cursor.fetchone()
             if row is None:
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
                 return
             new_id = row[0]
         else:
-            cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at))
+            cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt))
             new_id = cursor.lastrowid
             if not new_id:
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
@@ -1120,8 +1129,11 @@ def do_publish(uid, reply_token):
                         {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": m_prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]}
-                ]},
+                        {"type": "text", "text": m_prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]},
+                ] + ([{"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": m[12], "color": "#333333", "size": "sm", "flex": 4}]}]
+                    if len(m) > 12 and m[12] and m[12] != "其他" else [])},
                 "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                     contact_btn,
                     {"type": "button", "style": "link", "height": "sm",
@@ -1143,7 +1155,7 @@ def do_publish(uid, reply_token):
                 pair_conn.close()
             # 被動推播：通知既有配對者（含發布者的 LINE ID），尊重對方通知設定
             if is_notify_enabled(m[0]):
-                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy))
+                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt))
 
         rating_conn.close()
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
@@ -1186,7 +1198,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
         s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
         user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
 
-    c.execute(q("SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id, id FROM matches WHERE user_type = ? AND user_id != ? AND status = 'active' AND time_info BETWEEN ? AND ?"),
+    c.execute(q("SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id, id, vehicle_type FROM matches WHERE user_type = ? AND user_id != ? AND status = 'active' AND time_info BETWEEN ? AND ?"),
               [target_type, user_id, s_range, e_range])
     raw_res = c.fetchall()
 
@@ -1197,7 +1209,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
         user_p = 1  # 無法解析時預設 1，避免 crash 導致全部配不到
 
     for m in raw_res:
-        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id = m
+        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id, m_vt = m
         if m_sc == m_ec:
             match_direction = 0
         else:
@@ -1819,7 +1831,7 @@ def handle_message(event):
         conn = get_db()
         try:
             my_matches = conn.execute(
-                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
+                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at, vehicle_type FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
                 (uid,)
             ).fetchall()
         finally:
@@ -1830,37 +1842,42 @@ def handle_message(event):
         else:
             bubbles = []
             for m in my_matches:
-                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at = m
+                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at, vtype = m
                 role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
                 hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
                 lid_text = f"@{lid}" if lid else "未設定"
                 vc_text = f"{vc or 0} 次"
                 exp_text = str(exp_at)[5:16] if exp_at else "未知"
+                body_items = [
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": t_info[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": fee or "未設定", "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "LINE ID", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": lid_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "瀏覽", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": vc_text, "color": "#888888", "size": "sm", "flex": 4}]},
+                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]},
+                ]
+                if vtype and vtype != "其他":
+                    body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": vtype, "color": "#333333", "size": "sm", "flex": 4}]})
                 bubbles.append({
                     "type": "bubble",
                     "header": {"type": "box", "layout": "vertical",
                         "contents": [{"type": "text", "text": role, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
                         "backgroundColor": hdr_color},
-                    "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                            {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                            {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
-                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                            {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                            {"type": "text", "text": t_info[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
-                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                            {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                            {"type": "text", "text": fee or "未設定", "color": "#333333", "size": "sm", "flex": 4}]},
-                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                            {"type": "text", "text": "LINE ID", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                            {"type": "text", "text": lid_text, "color": "#333333", "size": "sm", "flex": 4}]},
-                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                            {"type": "text", "text": "瀏覽", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                            {"type": "text", "text": vc_text, "color": "#888888", "size": "sm", "flex": 4}]},
-                        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                            {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                            {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]},
-                    ]},
+                    "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_items},
                     "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                         {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                          "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
@@ -2102,11 +2119,11 @@ def handle_message(event):
                 order_clause = "time_info ASC"
             if ftype == "all":
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE {base_cond} ORDER BY {order_clause} LIMIT ? OFFSET ?"
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at, vehicle_type FROM matches WHERE {base_cond} ORDER BY {order_clause} LIMIT ? OFFSET ?"
                 ), dir_vals + time_vals + [page_size + 1, offset]).fetchall()
             else:
                 rows = conn.execute(q(
-                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at FROM matches WHERE user_type = ? AND {base_cond} ORDER BY {order_clause} LIMIT ? OFFSET ?"
+                    f"SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, p_count, line_id, expires_at, vehicle_type FROM matches WHERE user_type = ? AND {base_cond} ORDER BY {order_clause} LIMIT ? OFFSET ?"
                 ), [ftype] + dir_vals + time_vals + [page_size + 1, offset]).fetchall()
             has_next = len(rows) > page_size
             rows = rows[:page_size]
@@ -2123,7 +2140,7 @@ def handle_message(event):
 
             bubbles = []
             for r in rows:
-                trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid, exp_at = r
+                trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid, exp_at, vtype = r
                 avg, cnt = get_user_rating(conn, owner_uid)
                 rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
                 icon = "🚗" if utype == 'driver' else "🙋"
@@ -2177,6 +2194,10 @@ def handle_message(event):
                         {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]}
                 ]
+                if vtype and vtype != "其他":
+                    body_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": vtype, "color": "#333333", "size": "sm", "flex": 4}]})
                 if is_own:
                     body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#aaaaaa", "align": "end"})
                 bubbles.append({
@@ -2450,7 +2471,38 @@ def handle_message(event):
                 ])
             ))
         else:
-            safe_reply(event.reply_token, get_main_cat_menu())
+            # 司機才需要選車型，乘客直接進標籤
+            conn2 = get_db()
+            try:
+                ut_row = conn2.execute(q("SELECT current_type FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+            finally:
+                conn2.close()
+            if ut_row and ut_row[0] == "driver":
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="🚗 請選擇車型：",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="轎車", text="車型:轎車")),
+                        QuickReplyButton(action=MessageAction(label="休旅車", text="車型:休旅車")),
+                        QuickReplyButton(action=MessageAction(label="廂型車", text="車型:廂型車")),
+                        QuickReplyButton(action=MessageAction(label="小貨車", text="車型:小貨車")),
+                        QuickReplyButton(action=MessageAction(label="大貨車", text="車型:大貨車")),
+                        QuickReplyButton(action=MessageAction(label="營業半拖", text="車型:營業半拖")),
+                        QuickReplyButton(action=MessageAction(label="遊覽車", text="車型:遊覽車")),
+                        QuickReplyButton(action=MessageAction(label="其他/略過", text="車型:其他")),
+                    ])
+                ))
+            else:
+                safe_reply(event.reply_token, get_main_cat_menu())
+
+    elif msg.startswith("車型:"):
+        vtype = msg.split(":")[1]
+        conn = get_db()
+        try:
+            conn.execute(q("UPDATE user_state SET temp_vehicle = ? WHERE user_id = ?"), (vtype, uid))
+            conn.commit()
+        finally:
+            conn.close()
+        safe_reply(event.reply_token, get_main_cat_menu())
 
     elif msg.startswith("規範:"):
         p = msg.split(":")[1]
