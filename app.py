@@ -607,7 +607,7 @@ def get_dauding_confirm_flex(parsed, uid):
 
 
 # --- 4. Flex 卡片建構 ---
-def get_publish_confirm_flex(res_data, match_id):
+def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no=""):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res_data
     main_color = "#00b900" if ut == 'driver' else "#1e90ff"
     ps_text = ps.strip().rstrip(",") if ps else "（未選）"
@@ -643,7 +643,10 @@ def get_publish_confirm_flex(res_data, match_id):
               {"type": "text", "text": ps_text, "wrap": True, "color": "#aaaaaa", "size": "xs", "flex": 5}
             ]},
             {"type": "text", "text": "＊標籤僅供對方參考，不影響媒合", "size": "xxs", "color": "#cccccc", "margin": "sm", "wrap": True}
-          ]}
+          ] + ([{"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+              {"type": "text", "text": "車輛", "color": "#aaaaaa", "size": "sm", "flex": 1},
+              {"type": "text", "text": vehicle_type + (f" / {plate_no}" if plate_no else ""), "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+          ]}] if ut == 'driver' and vehicle_type else [])}
         ]
       },
       "footer": {
@@ -1098,7 +1101,7 @@ def do_publish(uid, reply_token):
         conn.close()
 
     m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc)
-    output = [get_publish_confirm_flex(res[:12], new_id)]
+    output = [get_publish_confirm_flex(res[:12], new_id, vt, pn)]
 
     if m_list:
         match_bubbles = []
