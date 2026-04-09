@@ -1279,6 +1279,7 @@ def about():
   h2{color:#2c7a4b;font-size:1.1em;margin-top:32px;border-bottom:2px solid #d4edda;padding-bottom:4px}
   .subtitle{color:#666;margin-top:0;margin-bottom:28px}
   .btn{display:inline-block;background:#06c755;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:8px}
+  .btn-sponsor{display:inline-block;background:#e85d04;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:8px}
   ul{padding-left:20px}
   li{margin-bottom:6px}
   .note{font-size:0.88em;color:#888;margin-top:40px;border-top:1px solid #eee;padding-top:16px}
@@ -1320,7 +1321,10 @@ def about():
 <h2>收費說明</h2>
 <p>✅ <strong>平台媒合服務完全免費</strong>，不收取任何使用費或手續費。<br>
 司機與乘客之間的費用（油資、過路費等）由雙方自行協議，平台<strong>不經手任何金流</strong>。</p>
-<p>若您認為本服務對您有幫助，歡迎自由贊助支持平台持續營運（非強制）。</p>
+<p>若您認為本服務對您有幫助，歡迎自由贊助支持平台持續營運（非強制）。<br>
+贊助款項透過綠界科技（ECPay）金流處理，安全有保障。</p>
+<a class="btn-sponsor" href="#donate">❤️ 贊助支持平台</a>
+<p style="margin-top:8px;font-size:0.85em;color:#888">（贊助連結建置中，敬請期待）</p>
 
 <h2>聯絡我們</h2>
 <p>使用上有任何問題，請在 LINE Bot 內輸入「回報問題」，或來信：<br>
