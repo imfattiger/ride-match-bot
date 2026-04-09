@@ -1317,8 +1317,14 @@ def about():
 <a class="btn" href="https://line.me/R/ti/p/@321nmofi">加入 LINE Bot</a>
 <p style="margin-top:12px;color:#666">或在 LINE 搜尋：<strong>sun car 順咖媒合</strong></p>
 
-<h2>聯絡</h2>
-<p>使用上有任何問題，請在 LINE Bot 內輸入「回報問題」。</p>
+<h2>收費說明</h2>
+<p>✅ <strong>平台媒合服務完全免費</strong>，不收取任何使用費或手續費。<br>
+司機與乘客之間的費用（油資、過路費等）由雙方自行協議，平台<strong>不經手任何金流</strong>。</p>
+<p>若您認為本服務對您有幫助，歡迎自由贊助支持平台持續營運（非強制）。</p>
+
+<h2>聯絡我們</h2>
+<p>使用上有任何問題，請在 LINE Bot 內輸入「回報問題」，或來信：<br>
+📧 <a href="mailto:jun913758@gmail.com">jun913758@gmail.com</a></p>
 
 <div class="note">
 <strong>免責聲明</strong><br>
