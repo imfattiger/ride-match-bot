@@ -2533,7 +2533,7 @@ def handle_message(event):
                 conn.commit()
                 conn.close()
                 safe_reply(event.reply_token, TextSendMessage(
-                    text=f"✅ 車種：{vcat}\n\n🚗 直接輸入車型型號（如：RAV4、Wish、Hiace）\n沒有或不想填，按下面「略過」即可",
+                    text=f"✅ 車種：{vcat}\n\n🚗 直接輸入車型型號（如：RAV4、Wish、Hiace）\n沒有或不想填，按下面「略過」即可\n\n⌨️ 點左下角鍵盤圖示輸入文字",
                     quick_reply=QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="略過（不填型號）", text="略過型號")),
                     ])
@@ -2628,7 +2628,7 @@ def handle_message(event):
             if prev and prev[0]:
                 saved_id = prev[0]
                 safe_reply(event.reply_token, TextSendMessage(
-                    text=f"📱 聯絡方式設定\n\n上次使用的 LINE ID：@{saved_id}\n\n直接沿用還是重新輸入？",
+                    text=f"📱 聯絡方式設定\n\n上次使用的 LINE ID：@{saved_id}\n\n直接沿用還是重新輸入？\n⌨️ 點左下角鍵盤圖示可直接輸入新 ID",
                     quick_reply=QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label=f"沿用 @{saved_id[:10]}", text=saved_id)),
                         QuickReplyButton(action=MessageAction(label="重新輸入", text="重新輸入LINE ID")),
@@ -2742,7 +2742,7 @@ def handle_message(event):
             finally:
                 conn.close()
             safe_reply(event.reply_token, TextSendMessage(
-                text=f"✅ 車型：{vfull}\n\n🔢 直接輸入車牌號碼（如：ABC-1234）\n不想公開，按下面「略過」即可",
+                text=f"✅ 車型：{vfull}\n\n🔢 直接輸入車牌號碼（如：ABC-1234）\n不想公開，按下面「略過」即可\n\n⌨️ 點左下角鍵盤圖示輸入文字",
                 quick_reply=QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="略過（不填車牌）", text="略過車牌")),
                 ])
@@ -2765,7 +2765,7 @@ def handle_message(event):
         if res and res[0] == 'WAIT_LINE_ID':
             if msg == '重新輸入LINE ID':
                 safe_reply(event.reply_token, TextSendMessage(
-                    text="請輸入你的 LINE ID（不含 @）：",
+                    text="請輸入你的 LINE ID（不含 @）：\n⌨️ 點左下角鍵盤圖示輸入文字",
                     quick_reply=QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
                     ])
