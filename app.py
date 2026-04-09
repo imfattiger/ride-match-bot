@@ -1323,8 +1323,7 @@ def about():
 司機與乘客之間的費用（油資、過路費等）由雙方自行協議，平台<strong>不經手任何金流</strong>。</p>
 <p>若您認為本服務對您有幫助，歡迎自由贊助支持平台持續營運（非強制）。<br>
 贊助款項透過綠界科技（ECPay）金流處理，安全有保障。</p>
-<a class="btn-sponsor" href="#donate">❤️ 贊助支持平台</a>
-<p style="margin-top:8px;font-size:0.85em;color:#888">（贊助連結建置中，敬請期待）</p>
+<a class="btn-sponsor" href="https://p.ecpay.com.tw/8C9FE97" target="_blank">❤️ 贊助支持平台（每筆 $50）</a>
 
 <h2>聯絡我們</h2>
 <p>使用上有任何問題，請在 LINE Bot 內輸入「回報問題」，或來信：<br>
