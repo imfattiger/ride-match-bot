@@ -236,6 +236,8 @@ SCHEMA_MIGRATIONS = [
          "ALTER TABLE matches ADD COLUMN plate_no TEXT"),
     (24, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_plate TEXT",
          "ALTER TABLE user_state ADD COLUMN temp_plate TEXT"),
+    (25, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_vmodel TEXT",
+         "ALTER TABLE user_state ADD COLUMN temp_vmodel TEXT"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -2489,41 +2491,66 @@ def handle_message(event):
             finally:
                 conn2.close()
             if ut_row and ut_row[0] == "driver":
-                conn3 = get_db()
-                try:
-                    conn3.execute(q("UPDATE user_state SET step = 'WAIT_VEHICLE' WHERE user_id = ?"), (uid,))
-                    conn3.commit()
-                finally:
-                    conn3.close()
+                qr_items = [
+                    QuickReplyButton(action=MessageAction(label="轎車", text="車種:轎車")),
+                    QuickReplyButton(action=MessageAction(label="休旅車", text="車種:休旅車")),
+                    QuickReplyButton(action=MessageAction(label="廂型車", text="車種:廂型車")),
+                    QuickReplyButton(action=MessageAction(label="小貨車", text="車種:小貨車")),
+                    QuickReplyButton(action=MessageAction(label="大貨車", text="車種:大貨車")),
+                    QuickReplyButton(action=MessageAction(label="營業半拖", text="車種:營業半拖")),
+                    QuickReplyButton(action=MessageAction(label="遊覽車", text="車種:遊覽車")),
+                    QuickReplyButton(action=MessageAction(label="略過/其他", text="車種:略過")),
+                ]
                 if prev_veh and prev_veh[0]:
-                    pv_vt = prev_veh[0]
+                    pv_full = prev_veh[0]  # 格式：「休旅車 RAV4」或單純「休旅車」
                     pv_pn = prev_veh[1] or ''
-                    label_text = f"沿用 {pv_vt}" + (f" / {pv_pn}" if pv_pn else "")
-                    safe_reply(event.reply_token, TextSendMessage(
-                        text=f"🚗 請輸入車型（如：RAV4、Wish、2噸半貨車）：\n\n上次使用：{pv_vt}" + (f"，車牌：{pv_pn}" if pv_pn else ""),
-                        quick_reply=QuickReply(items=[
-                            QuickReplyButton(action=MessageAction(label=label_text[:20], text=f"沿用車輛:{pv_vt}|{pv_pn}")),
-                            QuickReplyButton(action=MessageAction(label="略過", text="沿用車輛:|")),
-                        ])
-                    ))
+                    label_text = ("沿用 " + pv_full + (f"/{pv_pn}" if pv_pn else ""))[:20]
+                    qr_items.insert(0, QuickReplyButton(action=MessageAction(
+                        label=label_text, text=f"沿用車輛:{pv_full}|{pv_pn}"
+                    )))
+                    hint = f"\n\n上次：{pv_full}" + (f" / {pv_pn}" if pv_pn else "")
                 else:
-                    safe_reply(event.reply_token, TextSendMessage(
-                        text="🚗 請輸入車型（如：RAV4、Wish、2噸半貨車）：",
-                        quick_reply=QuickReply(items=[
-                            QuickReplyButton(action=MessageAction(label="略過", text="沿用車輛:|")),
-                        ])
-                    ))
+                    hint = ""
+                safe_reply(event.reply_token, TextSendMessage(
+                    text=f"🚗 選擇車種類別：{hint}",
+                    quick_reply=QuickReply(items=qr_items[:13])
+                ))
             else:
                 safe_reply(event.reply_token, get_main_cat_menu())
 
+    elif msg.startswith("車種:"):
+        # 選完車種類別 → 問型號
+        vcat = msg.split(":", 1)[1]
+        conn = get_db()
+        try:
+            if vcat == "略過":
+                conn.execute(q("UPDATE user_state SET temp_vehicle = '', temp_vmodel = '', temp_plate = '', step = NULL WHERE user_id = ?"), (uid,))
+                conn.commit()
+                conn.close()
+                safe_reply(event.reply_token, get_main_cat_menu())
+            else:
+                conn.execute(q("UPDATE user_state SET temp_vehicle = ?, step = 'WAIT_VMODEL' WHERE user_id = ?"), (vcat, uid))
+                conn.commit()
+                conn.close()
+                safe_reply(event.reply_token, TextSendMessage(
+                    text=f"✅ 車種：{vcat}\n\n請輸入車型型號（如：RAV4、Wish、Hiace）：",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="略過型號", text="略過型號")),
+                    ])
+                ))
+        except Exception:
+            try: conn.close()
+            except: pass
+            safe_reply(event.reply_token, get_main_cat_menu())
+
     elif msg.startswith("沿用車輛:"):
-        # 沿用上次車型+車牌（格式：沿用車輛:車型|車牌）
+        # 沿用上次車型+車牌（格式：沿用車輛:完整車型|車牌）
         parts = msg[5:].split("|", 1)
-        vtype = parts[0].strip()
+        vfull = parts[0].strip()   # 「休旅車 RAV4」整串存回 temp_vehicle
         plate = parts[1].strip() if len(parts) > 1 else ""
         conn = get_db()
         try:
-            conn.execute(q("UPDATE user_state SET temp_vehicle = ?, temp_plate = ?, step = NULL WHERE user_id = ?"), (vtype, plate, uid))
+            conn.execute(q("UPDATE user_state SET temp_vehicle = ?, temp_vmodel = '', temp_plate = ?, step = NULL WHERE user_id = ?"), (vfull, plate, uid))
             conn.commit()
         finally:
             conn.close()
@@ -2693,32 +2720,36 @@ def handle_message(event):
             safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已將你的 LINE ID（@{line_id}）傳給對方！"))
             return
 
-        # 處理車型輸入
-        if res and res[0] == 'WAIT_VEHICLE':
-            vtype = msg.strip()
-            if not vtype or len(vtype) > 20:
+        # 處理型號輸入（WAIT_VMODEL）
+        if res and res[0] == 'WAIT_VMODEL':
+            vmodel = '' if msg == '略過型號' else msg.strip()
+            if vmodel and len(vmodel) > 20:
                 safe_reply(event.reply_token, TextSendMessage(
-                    text="⚠️ 車型不能空白且不超過20字，請重新輸入（如：RAV4、Wish）：",
+                    text="⚠️ 型號不超過20字，請重新輸入：",
                     quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="略過", text="沿用車輛:|")),
+                        QuickReplyButton(action=MessageAction(label="略過型號", text="略過型號")),
                     ])
                 ))
                 return
             conn = get_db()
             try:
-                conn.execute(q("UPDATE user_state SET temp_vehicle = ?, step = 'WAIT_PLATE' WHERE user_id = ?"), (vtype, uid))
+                # 把「車種 型號」合併存進 temp_vehicle，方便沿用和顯示
+                vcat = conn.execute(q("SELECT temp_vehicle FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+                vcat = vcat[0] if vcat else ''
+                vfull = (vcat + (" " + vmodel if vmodel else "")).strip()
+                conn.execute(q("UPDATE user_state SET temp_vehicle = ?, temp_vmodel = ?, step = 'WAIT_PLATE' WHERE user_id = ?"), (vfull, vmodel, uid))
                 conn.commit()
             finally:
                 conn.close()
             safe_reply(event.reply_token, TextSendMessage(
-                text=f"✅ 車型：{vtype}\n\n🔢 請輸入車牌號碼（如：ABC-1234）：",
+                text=f"✅ 車型：{vfull}\n\n🔢 請輸入車牌號碼（如：ABC-1234）：",
                 quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="略過", text="略過車牌")),
+                    QuickReplyButton(action=MessageAction(label="略過車牌", text="略過車牌")),
                 ])
             ))
             return
 
-        # 處理車牌輸入
+        # 處理車牌輸入（WAIT_PLATE）
         if res and res[0] == 'WAIT_PLATE':
             plate = '' if msg == '略過車牌' else msg.strip().upper()
             conn = get_db()
