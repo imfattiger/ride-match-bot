@@ -1634,6 +1634,41 @@ def handle_postback(event):
                 ])
             ))
 
+        elif data.startswith("action=edit_vehicle"):
+            params = dict(parse_qsl(data))
+            match_id = params.get('id')
+            conn = get_db()
+            try:
+                row = conn.execute(q("SELECT vehicle_type, plate_no FROM matches WHERE id = ? AND user_id = ?"), (match_id, uid)).fetchone()
+            finally:
+                conn.close()
+            if not row:
+                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到此行程。"))
+            else:
+                cur_vt = row[0] or ''
+                cur_pn = row[1] or ''
+                hint = f"目前：{cur_vt}" + (f" / {cur_pn}" if cur_pn else "") if cur_vt else "目前：未設定"
+                conn2 = get_db()
+                try:
+                    conn2.execute(q("UPDATE user_state SET step = ? WHERE user_id = ?"), (f'EDIT_VEHICLE:{match_id}', uid))
+                    conn2.commit()
+                finally:
+                    conn2.close()
+                qr_items = [
+                    QuickReplyButton(action=MessageAction(label="轎車", text=f"改車種:{match_id}:轎車")),
+                    QuickReplyButton(action=MessageAction(label="休旅車", text=f"改車種:{match_id}:休旅車")),
+                    QuickReplyButton(action=MessageAction(label="廂型車", text=f"改車種:{match_id}:廂型車")),
+                    QuickReplyButton(action=MessageAction(label="小貨車", text=f"改車種:{match_id}:小貨車")),
+                    QuickReplyButton(action=MessageAction(label="大貨車", text=f"改車種:{match_id}:大貨車")),
+                    QuickReplyButton(action=MessageAction(label="營業半拖", text=f"改車種:{match_id}:營業半拖")),
+                    QuickReplyButton(action=MessageAction(label="遊覽車", text=f"改車種:{match_id}:遊覽車")),
+                    QuickReplyButton(action=MessageAction(label="清除車輛資訊", text=f"改車種:{match_id}:清除")),
+                ]
+                safe_reply(event.reply_token, TextSendMessage(
+                    text=f"🚗 修改車輛資訊\n{hint}\n\n選擇車種類別：",
+                    quick_reply=QuickReply(items=qr_items)
+                ))
+
         elif data.startswith("contact_line="):
             line_id = data.split("=")[1]
             safe_reply(event.reply_token, TextSendMessage(
@@ -1896,7 +1931,9 @@ def handle_message(event):
                             {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                              "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
                         ]}
-                    ]}
+                    ] + ([{"type": "button", "style": "secondary", "height": "sm",
+                           "action": {"type": "postback", "label": "🚗 改車型/車牌", "data": f"action=edit_vehicle&id={m_id}"}}]
+                         if utype == 'driver' else [])}
                 })
             safe_reply(event.reply_token, FlexSendMessage(
                 alt_text="我的行程",
@@ -2546,7 +2583,7 @@ def handle_message(event):
     elif msg.startswith("沿用車輛:"):
         # 沿用上次車型+車牌（格式：沿用車輛:完整車型|車牌）
         parts = msg[5:].split("|", 1)
-        vfull = parts[0].strip()   # 「休旅車 RAV4」整串存回 temp_vehicle
+        vfull = parts[0].strip()
         plate = parts[1].strip() if len(parts) > 1 else ""
         conn = get_db()
         try:
@@ -2555,6 +2592,37 @@ def handle_message(event):
         finally:
             conn.close()
         safe_reply(event.reply_token, get_main_cat_menu())
+
+    elif msg.startswith("改車種:"):
+        # 格式：改車種:{match_id}:{車種}
+        parts = msg.split(":", 2)
+        if len(parts) < 3:
+            return
+        match_id, vcat = parts[1], parts[2]
+        conn = get_db()
+        try:
+            if vcat == "清除":
+                conn.execute(q("UPDATE matches SET vehicle_type = '', plate_no = '' WHERE id = ? AND user_id = ?"), (match_id, uid))
+                conn.execute(q("UPDATE user_state SET step = NULL WHERE user_id = ?"), (uid,))
+                conn.commit()
+                conn.close()
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="✅ 已清除車輛資訊。",
+                    quick_reply=QuickReply(items=[QuickReplyButton(action=MessageAction(label="📋 我的行程", text="我的行程"))])
+                ))
+            else:
+                conn.execute(q("UPDATE user_state SET step = ? WHERE user_id = ?"), (f'EDIT_VMODEL:{match_id}:{vcat}', uid))
+                conn.commit()
+                conn.close()
+                safe_reply(event.reply_token, TextSendMessage(
+                    text=f"✅ 車種：{vcat}\n\n🚗 直接輸入車型型號（如：RAV4、Wish、Hiace）\n沒有或不想填，按下面「略過」即可\n\n⌨️ 點左下角鍵盤圖示輸入文字",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="略過（不填型號）", text="略過型號")),
+                    ])
+                ))
+        except Exception:
+            try: conn.close()
+            except: pass
 
     elif msg.startswith("規範:"):
         p = msg.split(":")[1]
@@ -2718,6 +2786,56 @@ def handle_message(event):
                 text=f"✅ 對方回覆了 LINE ID：@{line_id}\n點此加好友：https://line.me/ti/p/~{line_id}"
             ))
             safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已將你的 LINE ID（@{line_id}）傳給對方！"))
+            return
+
+        # 處理修改既有行程的型號輸入（EDIT_VMODEL:{match_id}:{vcat}）
+        if res and res[0] and res[0].startswith('EDIT_VMODEL:'):
+            parts = res[0].split(':', 2)
+            match_id = parts[1] if len(parts) > 1 else ''
+            vcat = parts[2] if len(parts) > 2 else ''
+            vmodel = '' if msg == '略過型號' else msg.strip()
+            if vmodel and len(vmodel) > 20:
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ 型號不超過20字，請重新輸入：",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="略過型號", text="略過型號")),
+                    ])
+                ))
+                return
+            vfull = (vcat + (" " + vmodel if vmodel else "")).strip()
+            conn = get_db()
+            try:
+                conn.execute(q("UPDATE user_state SET step = ? WHERE user_id = ?"), (f'EDIT_PLATE_ONLY:{match_id}:{vfull}', uid))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"✅ 車型：{vfull}\n\n🔢 直接輸入車牌號碼（如：ABC-1234）\n不想公開，按下面「略過」即可\n\n⌨️ 點左下角鍵盤圖示輸入文字",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="略過（不填車牌）", text="略過車牌")),
+                ])
+            ))
+            return
+
+        # 處理修改既有行程的車牌輸入（EDIT_PLATE_ONLY:{match_id}:{vfull}）
+        if res and res[0] and res[0].startswith('EDIT_PLATE_ONLY:'):
+            parts = res[0].split(':', 2)
+            match_id = parts[1] if len(parts) > 1 else ''
+            vfull = parts[2] if len(parts) > 2 else ''
+            plate = '' if msg == '略過車牌' else msg.strip().upper()
+            conn = get_db()
+            try:
+                conn.execute(q("UPDATE matches SET vehicle_type = ?, plate_no = ? WHERE id = ? AND user_id = ?"), (vfull, plate, match_id, uid))
+                conn.execute(q("UPDATE user_state SET step = NULL WHERE user_id = ?"), (uid,))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, TextSendMessage(
+                text="✅ 車輛資訊已更新！",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="📋 我的行程", text="我的行程"))
+                ])
+            ))
             return
 
         # 處理型號輸入（WAIT_VMODEL）
