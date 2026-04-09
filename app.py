@@ -2533,9 +2533,9 @@ def handle_message(event):
                 conn.commit()
                 conn.close()
                 safe_reply(event.reply_token, TextSendMessage(
-                    text=f"✅ 車種：{vcat}\n\n請輸入車型型號（如：RAV4、Wish、Hiace）：",
+                    text=f"✅ 車種：{vcat}\n\n🚗 直接輸入車型型號（如：RAV4、Wish、Hiace）\n沒有或不想填，按下面「略過」即可",
                     quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="略過型號", text="略過型號")),
+                        QuickReplyButton(action=MessageAction(label="略過（不填型號）", text="略過型號")),
                     ])
                 ))
         except Exception:
@@ -2742,9 +2742,9 @@ def handle_message(event):
             finally:
                 conn.close()
             safe_reply(event.reply_token, TextSendMessage(
-                text=f"✅ 車型：{vfull}\n\n🔢 請輸入車牌號碼（如：ABC-1234）：",
+                text=f"✅ 車型：{vfull}\n\n🔢 直接輸入車牌號碼（如：ABC-1234）\n不想公開，按下面「略過」即可",
                 quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="略過車牌", text="略過車牌")),
+                    QuickReplyButton(action=MessageAction(label="略過（不填車牌）", text="略過車牌")),
                 ])
             ))
             return
