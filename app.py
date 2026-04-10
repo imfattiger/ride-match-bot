@@ -934,6 +934,8 @@ def get_welcome_flex():
                 {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
                  "action": {"type": "message", "label": "🔍 瀏覽現有行程", "text": "找行程"}},
                 {"type": "button", "style": "secondary", "height": "sm",
+                 "action": {"type": "message", "label": "📋 媒合規則說明", "text": "媒合規則"}},
+                {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}},
                 {"type": "button", "style": "primary", "height": "sm", "color": "#CC0000",
                  "action": {"type": "message", "label": "⚖️ 免責聲明與使用條款", "text": "免責聲明"}},
@@ -2058,6 +2060,12 @@ def handle_message(event):
                  "action": {"type": "message", "label": "🙋 找乘客（我要載人）", "text": "找類型:seeker"}},
                 {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "📋 全部行程", "text": "找類型:all"}}
+            ]},
+            "footer": {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "action": {"type": "message", "label": "📋 媒合規則", "text": "媒合規則"}},
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "action": {"type": "message", "label": "❓ 使用說明", "text": "幫助"}}
             ]}
         }
         safe_reply(event.reply_token, FlexSendMessage(alt_text="瀏覽行程", contents=bubble))
