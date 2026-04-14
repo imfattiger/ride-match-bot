@@ -238,8 +238,45 @@ SCHEMA_MIGRATIONS = [
          "ALTER TABLE user_state ADD COLUMN temp_plate TEXT"),
     (25, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_vmodel TEXT",
          "ALTER TABLE user_state ADD COLUMN temp_vmodel TEXT"),
+    (26, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS is_recurring INTEGER DEFAULT 0",
+         "ALTER TABLE matches ADD COLUMN is_recurring INTEGER DEFAULT 0"),
+    (27, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS recur_weekdays TEXT",
+         "ALTER TABLE matches ADD COLUMN recur_weekdays TEXT"),
+    (28, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_recur_days TEXT",
+         "ALTER TABLE user_state ADD COLUMN temp_recur_days TEXT"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
+
+WEEKDAY_LABELS = {1:"週一", 2:"週二", 3:"週三", 4:"週四", 5:"週五", 6:"週六", 7:"週日"}
+
+def _get_recur_freq_qr(include_cancel=False):
+    """QuickReply for recurring frequency selection (publish flow or edit)."""
+    items = [
+        QuickReplyButton(action=MessageAction(label="工作日（一～五）", text="循環天數:1,2,3,4,5")),
+        QuickReplyButton(action=MessageAction(label="週末（六、日）", text="循環天數:6,7")),
+        QuickReplyButton(action=MessageAction(label="每天", text="循環天數:1,2,3,4,5,6,7")),
+        QuickReplyButton(action=MessageAction(label="✏️ 自選星期", text="循環天數:自選")),
+    ]
+    if include_cancel:
+        items.append(QuickReplyButton(action=MessageAction(label="改為單次", text="循環天數:取消固定")))
+    return QuickReply(items=items)
+
+def _send_recur_day_toggle(reply_token, selected_days_set):
+    """Show weekday toggle QuickReply for custom recurring day selection."""
+    items = []
+    for d in range(1, 8):
+        label = ("✓" if d in selected_days_set else "") + WEEKDAY_LABELS[d]
+        items.append(QuickReplyButton(action=MessageAction(label=label, text=f"改循環星期:{d}")))
+    items.append(QuickReplyButton(action=MessageAction(label="✅ 確認選好了", text="循環天數確認")))
+    selected_text = "、".join(WEEKDAY_LABELS[d] for d in sorted(selected_days_set)) if selected_days_set else "（尚未選擇）"
+    safe_reply(reply_token, TextSendMessage(
+        text=f"🔁 自選出發星期\n目前已選：{selected_text}\n\n點擊星期切換選取／取消：",
+        quick_reply=QuickReply(items=items)
+    ))
+
+def _recur_days_label(recur_wd):
+    """Convert '1,2,3,4,5' → '週一、週二、週三、週四、週五'."""
+    return "、".join(WEEKDAY_LABELS.get(int(d), d) for d in (recur_wd or '').split(',') if d.strip().isdigit())
 
 def init_db():
     conn = get_db()
@@ -607,13 +644,42 @@ def get_dauding_confirm_flex(parsed, uid):
 
 
 # --- 4. Flex 卡片建構 ---
-def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no=""):
+def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", recur_days=""):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res_data
     main_color = "#00b900" if ut == 'driver' else "#1e90ff"
     ps_text = ps.strip().rstrip(",") if ps else "（未選）"
     role_label = "載客/貨" if ut == "driver" else "搭車/寄物"
     share_text = f"【sun car 順咖媒合】{role_label}徵求 🚗\n\n📍 {sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人・費用：{fe}\n\n有要同方向的嗎？加 LINE Bot「sun car 順咖媒合」一起揪行程！"
     share_url = f"https://line.me/R/msg/text/?{quote(share_text)}"
+
+    extra_rows = []
+    if ut == 'driver' and vehicle_type:
+        extra_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": "車輛", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": vehicle_type + (f" / {plate_no}" if plate_no else ""), "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+        ]})
+    if recur_days:
+        extra_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": "循環", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": "🔁 每週 " + _recur_days_label(recur_days), "wrap": True, "color": "#1D9E75", "size": "sm", "flex": 5}
+        ]})
+
+    footer_btns = [
+        {"type": "button", "style": "primary", "height": "sm", "color": "#42659a", "action": {
+            "type": "uri", "label": "📤 分享行程給朋友", "uri": share_url
+        }},
+        {"type": "button", "style": "link", "height": "sm", "action": {
+            "type": "postback", "label": "🔁 修改循環天數", "data": f"action=edit_recur&id={match_id}"
+        }, "color": "#888888"},
+        {"type": "button", "style": "link", "height": "sm", "action": {
+            "type": "postback", "label": "❌ 撤回/刪除此行程", "data": f"action=delete&id={match_id}"
+        }, "color": "#ff4b4b"},
+        {"type": "separator", "margin": "sm"},
+        {"type": "button", "style": "link", "height": "sm", "action": {
+            "type": "uri", "label": "☕ 請開發者喝杯咖啡",
+            "uri": "https://p.ecpay.com.tw/8C9FE97"
+        }, "color": "#aaaaaa"}
+    ]
 
     bubble = {
       "type": "bubble",
@@ -643,26 +709,11 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no=""):
               {"type": "text", "text": ps_text, "wrap": True, "color": "#aaaaaa", "size": "xs", "flex": 5}
             ]},
             {"type": "text", "text": "＊標籤僅供對方參考，不影響媒合", "size": "xxs", "color": "#cccccc", "margin": "sm", "wrap": True}
-          ] + ([{"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "車輛", "color": "#aaaaaa", "size": "sm", "flex": 1},
-              {"type": "text", "text": vehicle_type + (f" / {plate_no}" if plate_no else ""), "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
-          ]}] if ut == 'driver' and vehicle_type else [])}
+          ] + extra_rows}
         ]
       },
       "footer": {
-        "type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-          {"type": "button", "style": "primary", "height": "sm", "color": "#42659a", "action": {
-            "type": "uri", "label": "📤 分享行程給朋友", "uri": share_url
-          }},
-          {"type": "button", "style": "link", "height": "sm", "action": {
-            "type": "postback", "label": "❌ 撤回/刪除此行程", "data": f"action=delete&id={match_id}"
-          }, "color": "#ff4b4b"},
-          {"type": "separator", "margin": "sm"},
-          {"type": "button", "style": "link", "height": "sm", "action": {
-            "type": "uri", "label": "☕ 請開發者喝杯咖啡",
-            "uri": "https://p.ecpay.com.tw/8C9FE97"
-          }, "color": "#aaaaaa"}
-        ]
+        "type": "box", "layout": "vertical", "spacing": "sm", "contents": footer_btns
       }
     }
     return FlexSendMessage(alt_text="行程發布成功", contents=bubble)
@@ -1060,15 +1111,17 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
 def do_publish(uid, reply_token):
     conn = get_db()
     try:
-        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire, temp_vehicle, temp_plate FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire, temp_vehicle, temp_plate, temp_recur_days FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
         if not res:
             safe_reply(reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
-        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp, vt, pn = res
+        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp, vt, pn, recur_days = res
         lid = lid or ''
         vt = vt or ''
         pn = pn or ''
-        expire_days = int(exp) if exp else 3
+        recur_days = recur_days or ''
+        is_recurring = 1 if recur_days else 0
+        expire_days = 30 if is_recurring else (int(exp) if exp else 3)
         expires_at = (datetime.now() + timedelta(days=expire_days)).strftime("%Y-%m-%dT%H:%M")
 
         # 發行程數量上限（最多 3 筆 active）
@@ -1084,16 +1137,16 @@ def do_publish(uid, reply_token):
         # 防重複發布（原子性：唯一索引 + ON CONFLICT，避免競態條件）
         cursor = conn.cursor()
         if USE_PG:
-            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id'),
-                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn))
+            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no, is_recurring, recur_weekdays) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id'),
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None))
             row = cursor.fetchone()
             if row is None:
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
                 return
             new_id = row[0]
         else:
-            cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn))
+            cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no, is_recurring, recur_weekdays) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None))
             new_id = cursor.lastrowid
             if not new_id:
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
@@ -1102,8 +1155,8 @@ def do_publish(uid, reply_token):
     finally:
         conn.close()
 
-    m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc)
-    output = [get_publish_confirm_flex(res[:12], new_id, vt, pn)]
+    m_list = find_matches_v15(uid, ut, tt, sc, sd, ec, ed, fx, wy, pc, recur_days=recur_days)
+    output = [get_publish_confirm_flex(res[:12], new_id, vt, pn, recur_days=recur_days)]
 
     if m_list:
         match_bubbles = []
@@ -1192,7 +1245,7 @@ def do_publish(uid, reply_token):
     safe_reply(reply_token, output)
 
 # --- 5. 核心匹配演算法 ---
-def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_count):
+def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_count, recur_days=None):
     target_type = 'seeker' if utype == 'driver' else 'driver'
     conn = get_db()
     c = conn.cursor()
@@ -1211,7 +1264,14 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
         s_w, e_w = CITY_WEIGHTS.get(sc, 0), CITY_WEIGHTS.get(ec, 0)
         user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
 
-    c.execute(q("SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id, id, vehicle_type, plate_no FROM matches WHERE user_type = ? AND user_id != ? AND status = 'active' AND time_info BETWEEN ? AND ?"),
+    # 固定路線行程不受日期範圍限制，另外撈出來在 Python 端做時間匹配
+    c.execute(q("""SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id, id, vehicle_type, plate_no, COALESCE(is_recurring,0), recur_weekdays
+                   FROM matches
+                   WHERE user_type = ? AND user_id != ? AND status = 'active'
+                   AND (
+                     (COALESCE(is_recurring,0) = 0 AND time_info BETWEEN ? AND ?)
+                     OR COALESCE(is_recurring,0) = 1
+                   )"""),
               [target_type, user_id, s_range, e_range])
     raw_res = c.fetchall()
 
@@ -1221,8 +1281,34 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     except:
         user_p = 1  # 無法解析時預設 1，避免 crash 導致全部配不到
 
+    base_mins = base_t.hour * 60 + base_t.minute
+    user_weekday = base_t.isoweekday()  # 1=週一, 7=週日
+    user_weekdays = set(int(d) for d in (recur_days or '').split(',') if d.strip().isdigit())
+
     for m in raw_res:
-        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id, m_vt, m_pn = m
+        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id, m_vt, m_pn, m_is_recur, m_recur_wd = m
+
+        # 固定路線行程：比對 HH:MM 時間範圍 + 星期
+        if m_is_recur:
+            try:
+                m_t = datetime.strptime(m_time, "%Y-%m-%dT%H:%M")
+                m_mins = m_t.hour * 60 + m_t.minute
+                if abs(m_mins - base_mins) > buffer * 60:
+                    continue  # 時間不在緩衝範圍
+            except:
+                continue
+            m_weekdays = set(int(d) for d in (m_recur_wd or '').split(',') if d.strip().isdigit())
+            if not m_weekdays:
+                continue
+            if user_weekdays:
+                # 雙方都是固定路線：星期有交集才算配對
+                if not user_weekdays.intersection(m_weekdays):
+                    continue
+            else:
+                # 用戶是單次行程：看固定路線有沒有包含那天星期
+                if user_weekday not in m_weekdays:
+                    continue
+
         if m_sc == m_ec:
             match_direction = 0
         else:
@@ -1279,8 +1365,17 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
 
     conn.close()
     # 依出發時間與用戶時間的接近度排序，最近的配對優先
+    # 固定路線行程以 HH:MM 差距排序（日期不具參考意義）
+    def _sort_key(m):
+        try:
+            m_t = datetime.strptime(m[1], "%Y-%m-%dT%H:%M")
+            if m[14]:  # is_recurring
+                return abs((m_t.hour * 60 + m_t.minute) - base_mins) * 60
+            return abs((m_t - base_t).total_seconds())
+        except Exception:
+            return 999999
     try:
-        final_matches.sort(key=lambda m: abs((datetime.strptime(m[1], "%Y-%m-%dT%H:%M") - base_t).total_seconds()))
+        final_matches.sort(key=_sort_key)
     except Exception:
         pass
     return final_matches[:5]
@@ -1508,7 +1603,13 @@ def handle_postback(event):
                 conn.commit()
             finally:
                 conn.close()
-            safe_reply(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"🕒 出發時間：{t[5:16]}\n\n這是單次出發，還是固定路線（每週同一時段）？",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="單次出發", text="循環選擇:單次")),
+                    QuickReplyButton(action=MessageAction(label="🔁 固定路線", text="循環選擇:固定")),
+                ])
+            ))
 
         elif data.startswith("action=delete"):
             params = dict(parse_qsl(data))
@@ -1673,6 +1774,25 @@ def handle_postback(event):
                     text=f"🚗 修改車輛資訊\n{hint}\n\n選擇車種類別：",
                     quick_reply=QuickReply(items=qr_items)
                 ))
+
+        elif data.startswith("action=edit_recur"):
+            params = dict(parse_qsl(data))
+            match_id = params.get('id')
+            conn = get_db()
+            try:
+                row = conn.execute(q("SELECT user_id, recur_weekdays FROM matches WHERE id = ? AND status = 'active'"), (match_id,)).fetchone()
+                if not row or row[0] != uid:
+                    safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到此行程。"))
+                    return
+                conn.execute(q("UPDATE user_state SET step = ? WHERE user_id = ?"), (f"EDIT_RECUR:{match_id}", uid))
+                conn.commit()
+            finally:
+                conn.close()
+            cur_label = ("🔁 目前：每週 " + _recur_days_label(row[1])) if row[1] else "目前：單次行程"
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"🔁 修改出發頻率\n{cur_label}\n\n選擇新的頻率：",
+                quick_reply=_get_recur_freq_qr(include_cancel=True)
+            ))
 
         elif data.startswith("contact_line="):
             line_id = data.split("=")[1]
@@ -1879,7 +1999,7 @@ def handle_message(event):
         conn = get_db()
         try:
             my_matches = conn.execute(
-                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at, vehicle_type, plate_no FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
+                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at, vehicle_type, plate_no, COALESCE(is_recurring,0), recur_weekdays FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
                 (uid,)
             ).fetchall()
             notify_on = conn.execute(q("SELECT notify_on_match FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
@@ -1892,7 +2012,7 @@ def handle_message(event):
         else:
             bubbles = []
             for m in my_matches:
-                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at, vtype, pno = m
+                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at, vtype, pno, is_recur, recur_wd = m
                 # 查配對次數
                 pair_conn = get_db()
                 try:
@@ -1906,13 +2026,14 @@ def handle_message(event):
                 lid_text = f"@{lid}" if lid else "未設定"
                 vc_text = f"{vc or 0} 次"
                 exp_text = str(exp_at)[5:16] if exp_at else "未知"
+                time_text = t_info[5:16] + (" 起" if is_recur else "")
                 body_items = [
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": t_info[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": time_text, "color": "#333333", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": fee or "未設定", "color": "#333333", "size": "sm", "flex": 4}]},
@@ -1929,6 +2050,10 @@ def handle_message(event):
                         {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
                         {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]},
                 ]
+                if is_recur and recur_wd:
+                    body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "循環", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": "🔁 每週 " + _recur_days_label(recur_wd), "color": "#1D9E75", "size": "sm", "flex": 4}]})
                 if vtype:
                     veh_display = vtype + (f" / {pno}" if pno else "")
                     body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
@@ -1936,6 +2061,12 @@ def handle_message(event):
                         {"type": "text", "text": veh_display, "color": "#333333", "size": "sm", "flex": 4}]})
                 notify_label = "🔕 關閉配對通知" if notify_on else "🔔 開啟配對通知"
                 notify_text = "關閉配對通知" if notify_on else "開啟配對通知"
+                extra_btns = []
+                extra_btns.append({"type": "button", "style": "secondary", "height": "sm",
+                    "action": {"type": "postback", "label": "🔁 改循環天數", "data": f"action=edit_recur&id={m_id}"}})
+                if utype == 'driver':
+                    extra_btns.append({"type": "button", "style": "secondary", "height": "sm",
+                        "action": {"type": "postback", "label": "🚗 改車型/車牌", "data": f"action=edit_vehicle&id={m_id}"}})
                 bubbles.append({
                     "type": "bubble",
                     "header": {"type": "box", "layout": "vertical",
@@ -1953,9 +2084,7 @@ def handle_message(event):
                         ]},
                         {"type": "button", "style": "link", "height": "sm", "color": "#888888",
                          "action": {"type": "message", "label": notify_label, "text": notify_text}},
-                    ] + ([{"type": "button", "style": "secondary", "height": "sm",
-                           "action": {"type": "postback", "label": "🚗 改車型/車牌", "data": f"action=edit_vehicle&id={m_id}"}}]
-                         if utype == 'driver' else [])}
+                    ] + extra_btns}
                 })
             safe_reply(event.reply_token, FlexSendMessage(
                 alt_text="我的行程",
@@ -2651,6 +2780,173 @@ def handle_message(event):
         except Exception:
             try: conn.close()
             except: pass
+
+    # --- 固定路線/循環行程 ---
+    elif msg.startswith("循環選擇:"):
+        mode = msg.split(":", 1)[1]
+        if mode == "單次":
+            conn = get_db()
+            try:
+                conn.execute(q("UPDATE user_state SET temp_recur_days = NULL WHERE user_id = ?"), (uid,))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
+        else:  # 固定
+            safe_reply(event.reply_token, TextSendMessage(
+                text="🔁 選擇出發頻率：",
+                quick_reply=_get_recur_freq_qr()
+            ))
+
+    elif msg.startswith("循環天數:"):
+        val = msg.split(":", 1)[1]
+        conn = get_db()
+        try:
+            step_row = conn.execute(q("SELECT step FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+        finally:
+            conn.close()
+        step_str = step_row[0] if step_row and step_row[0] else ''
+        in_edit = step_str.startswith("EDIT_RECUR:")
+        edit_mid = step_str.split(":", 1)[1] if in_edit else None
+
+        if val == "自選":
+            new_step = f"EDIT_RECUR_CUSTOM:{edit_mid}:" if in_edit else "RECUR_CUSTOM:"
+            conn = get_db()
+            try:
+                conn.execute(q("UPDATE user_state SET step = ? WHERE user_id = ?"), (new_step, uid))
+                conn.commit()
+            finally:
+                conn.close()
+            _send_recur_day_toggle(event.reply_token, set())
+        elif val == "取消固定":
+            if in_edit:
+                conn = get_db()
+                try:
+                    conn.execute(q("UPDATE matches SET is_recurring = 0, recur_weekdays = NULL WHERE id = ? AND user_id = ?"), (edit_mid, uid))
+                    conn.execute(q("UPDATE user_state SET step = NULL WHERE user_id = ?"), (uid,))
+                    conn.commit()
+                finally:
+                    conn.close()
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="✅ 已改為單次行程。",
+                    quick_reply=QuickReply(items=[QuickReplyButton(action=MessageAction(label="📋 我的行程", text="我的行程"))])
+                ))
+            else:
+                conn = get_db()
+                try:
+                    conn.execute(q("UPDATE user_state SET temp_recur_days = NULL WHERE user_id = ?"), (uid,))
+                    conn.commit()
+                finally:
+                    conn.close()
+                safe_reply(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
+        else:
+            # 預設選項（工作日/週末/每天）
+            if in_edit:
+                conn = get_db()
+                try:
+                    conn.execute(q("UPDATE matches SET is_recurring = 1, recur_weekdays = ? WHERE id = ? AND user_id = ?"), (val, edit_mid, uid))
+                    conn.execute(q("UPDATE user_state SET step = NULL WHERE user_id = ?"), (uid,))
+                    conn.commit()
+                finally:
+                    conn.close()
+                safe_reply(event.reply_token, TextSendMessage(
+                    text=f"✅ 已更新：🔁 每週 {_recur_days_label(val)}",
+                    quick_reply=QuickReply(items=[QuickReplyButton(action=MessageAction(label="📋 我的行程", text="我的行程"))])
+                ))
+            else:
+                conn = get_db()
+                try:
+                    conn.execute(q("UPDATE user_state SET temp_recur_days = ? WHERE user_id = ?"), (val, uid))
+                    conn.commit()
+                finally:
+                    conn.close()
+                safe_reply(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
+
+    elif msg.startswith("改循環星期:"):
+        d_str = msg.split(":", 1)[1]
+        if not d_str.isdigit():
+            return
+        d = int(d_str)
+        conn = get_db()
+        try:
+            step_row = conn.execute(q("SELECT step FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+        finally:
+            conn.close()
+        step_str = step_row[0] if step_row and step_row[0] else ''
+
+        if step_str.startswith("RECUR_CUSTOM:"):
+            days_str = step_str[len("RECUR_CUSTOM:"):]
+            prefix = "RECUR_CUSTOM"
+            edit_mid = None
+        elif step_str.startswith("EDIT_RECUR_CUSTOM:"):
+            rest = step_str[len("EDIT_RECUR_CUSTOM:"):]
+            parts = rest.split(":", 1)
+            edit_mid = parts[0]
+            days_str = parts[1] if len(parts) > 1 else ""
+            prefix = "EDIT_RECUR_CUSTOM"
+        else:
+            return
+
+        current = set(int(x) for x in days_str.split(",") if x.strip().isdigit())
+        current.discard(d) if d in current else current.add(d)
+        new_days = ",".join(str(x) for x in sorted(current))
+        new_step = f"RECUR_CUSTOM:{new_days}" if prefix == "RECUR_CUSTOM" else f"EDIT_RECUR_CUSTOM:{edit_mid}:{new_days}"
+        conn = get_db()
+        try:
+            conn.execute(q("UPDATE user_state SET step = ? WHERE user_id = ?"), (new_step, uid))
+            conn.commit()
+        finally:
+            conn.close()
+        _send_recur_day_toggle(event.reply_token, current)
+
+    elif msg == "循環天數確認":
+        conn = get_db()
+        try:
+            step_row = conn.execute(q("SELECT step FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+        finally:
+            conn.close()
+        step_str = step_row[0] if step_row and step_row[0] else ''
+
+        if step_str.startswith("RECUR_CUSTOM:"):
+            days_str = step_str[len("RECUR_CUSTOM:"):]
+            edit_mid = None
+        elif step_str.startswith("EDIT_RECUR_CUSTOM:"):
+            rest = step_str[len("EDIT_RECUR_CUSTOM:"):]
+            parts = rest.split(":", 1)
+            edit_mid = parts[0]
+            days_str = parts[1] if len(parts) > 1 else ""
+        else:
+            return
+
+        days = sorted(int(x) for x in days_str.split(",") if x.strip().isdigit())
+        if not days:
+            safe_reply(event.reply_token, TextSendMessage(
+                text="⚠️ 還沒選任何星期，請先點選出發的星期！",
+                quick_reply=QuickReply(items=[QuickReplyButton(action=MessageAction(label="重新選", text="循環天數:自選"))])
+            ))
+            return
+        final_days = ",".join(str(d) for d in days)
+
+        if edit_mid:
+            conn = get_db()
+            try:
+                conn.execute(q("UPDATE matches SET is_recurring = 1, recur_weekdays = ? WHERE id = ? AND user_id = ?"), (final_days, edit_mid, uid))
+                conn.execute(q("UPDATE user_state SET step = NULL WHERE user_id = ?"), (uid,))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"✅ 已更新：🔁 每週 {_recur_days_label(final_days)}",
+                quick_reply=QuickReply(items=[QuickReplyButton(action=MessageAction(label="📋 我的行程", text="我的行程"))])
+            ))
+        else:
+            conn = get_db()
+            try:
+                conn.execute(q("UPDATE user_state SET temp_recur_days = ?, step = NULL WHERE user_id = ?"), (final_days, uid))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, get_area_carousel("📍 第一步：選擇【出發地】區域"))
 
     elif msg.startswith("規範:"):
         p = msg.split(":")[1]
