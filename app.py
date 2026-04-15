@@ -2584,7 +2584,7 @@ def handle_message(event):
         conn = get_db()
         try:
             res = conn.execute(q('SELECT step FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-            step = res[0] if res else "START"
+            step = (res[0] if res else None) or "START"
             col = "s_city" if step == "START" else "e_city"
             conn.execute(q(f'UPDATE user_state SET {col} = ? WHERE user_id = ?'), (c, uid))
             conn.commit()
@@ -2599,7 +2599,7 @@ def handle_message(event):
         conn = get_db()
         try:
             res = conn.execute(q('SELECT step FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
-            step = res[0] if res else "START"
+            step = (res[0] if res else None) or "START"
             if step == "START":
                 conn.execute(q('UPDATE user_state SET s_dist = ?, step = ? WHERE user_id = ?'), (d, "END", uid))
             else:
@@ -2942,7 +2942,7 @@ def handle_message(event):
         else:
             conn = get_db()
             try:
-                conn.execute(q("UPDATE user_state SET temp_recur_days = ?, step = NULL WHERE user_id = ?"), (final_days, uid))
+                conn.execute(q("UPDATE user_state SET temp_recur_days = ?, step = 'START' WHERE user_id = ?"), (final_days, uid))
                 conn.commit()
             finally:
                 conn.close()
