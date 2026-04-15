@@ -990,6 +990,8 @@ def get_welcome_flex():
                  "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}},
                 {"type": "button", "style": "primary", "height": "sm", "color": "#CC0000",
                  "action": {"type": "message", "label": "⚖️ 免責聲明與使用條款", "text": "免責聲明"}},
+                {"type": "button", "style": "primary", "height": "sm", "color": "#1877F2",
+                 "action": {"type": "uri", "label": "🏘️ 加入 FB 共乘社團", "uri": "https://www.facebook.com/groups/4288724691456198/"}},
                 {"type": "button", "style": "link", "height": "sm", "color": "#aaaaaa",
                  "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}}
             ]
