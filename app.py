@@ -244,6 +244,10 @@ SCHEMA_MIGRATIONS = [
          "ALTER TABLE matches ADD COLUMN recur_weekdays TEXT"),
     (28, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS temp_recur_days TEXT",
          "ALTER TABLE user_state ADD COLUMN temp_recur_days TEXT"),
+    (29, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS daily_push_date TEXT",
+         "ALTER TABLE matches ADD COLUMN daily_push_date TEXT"),
+    (30, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS daily_push_count INTEGER DEFAULT 0",
+         "ALTER TABLE matches ADD COLUMN daily_push_count INTEGER DEFAULT 0"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -1224,7 +1228,21 @@ def do_publish(uid, reply_token):
                 pair_conn.commit()
             finally:
                 pair_conn.close()
-            # 被動推播：通知既有配對者（含發布者的 LINE ID），尊重對方通知設定
+            # 被動推播：通知既有配對者，每趟行程每天最多推 2 次
+            today = datetime.now().strftime("%Y-%m-%d")
+            limit_conn = get_db()
+            try:
+                push_row = limit_conn.execute(q("SELECT daily_push_date, daily_push_count FROM matches WHERE id = ?"), (m[11],)).fetchone()
+                push_date = push_row[0] if push_row else None
+                push_cnt = (push_row[1] or 0) if push_row else 0
+                if push_date == today and push_cnt >= 2:
+                    limit_conn.close()
+                    continue  # 今日推播已達上限，跳過
+                new_cnt = push_cnt + 1 if push_date == today else 1
+                limit_conn.execute(q("UPDATE matches SET daily_push_date = ?, daily_push_count = ? WHERE id = ?"), (today, new_cnt, m[11]))
+                limit_conn.commit()
+            finally:
+                limit_conn.close()
             if is_notify_enabled(m[0]):
                 safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt, pn))
 
