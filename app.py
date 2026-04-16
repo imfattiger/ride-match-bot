@@ -1504,6 +1504,120 @@ def _check_admin_token():
         return True  # 未設定時不驗證（開發環境）
     return request.args.get('token') == expected
 
+@app.route("/admin", methods=['GET'])
+def admin_panel():
+    if not _check_admin_token():
+        return "<h3>401 Unauthorized</h3>", 401
+    try:
+        conn = get_db()
+        trips = conn.execute(q(
+            "SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, status, expires_at, created_at, COALESCE(is_recurring,0), recur_weekdays FROM matches ORDER BY created_at DESC LIMIT 200"
+        )).fetchall()
+        pairs = conn.execute(q(
+            "SELECT uid_a, match_id_a, uid_b, match_id_b, created_at FROM pairs ORDER BY created_at DESC LIMIT 100"
+        )).fetchall()
+        ratings = conn.execute(q(
+            "SELECT rater_id, ratee_id, score, match_id, created_at FROM ratings ORDER BY created_at DESC LIMIT 100"
+        )).fetchall()
+        conn.close()
+
+        status_color = {'active':'#1D9E75','expired':'#999','completed':'#1e90ff','cancelled':'#cc0000'}
+
+        trip_rows = ""
+        for t in trips:
+            tid,uid,utype,tinfo,sc,sd,ec,ed,fee,sts,exp,cat,is_recur,recur_wd = t
+            sc_badge = "🚗" if utype=='driver' else "🙋"
+            recur_tag = f" 🔁{recur_wd}" if is_recur and recur_wd else ""
+            color = status_color.get(sts,'#888')
+            token = os.getenv('ADMIN_LINE_ID','')
+            trip_rows += f"""<tr>
+<td>{tid}</td>
+<td style="font-size:11px">{uid[:12]}...</td>
+<td>{sc_badge}</td>
+<td>{str(tinfo)[5:16]}{recur_tag}</td>
+<td>{sc}{sd}→{ec}{ed}</td>
+<td>{fee or '-'}</td>
+<td style="color:{color};font-weight:bold">{sts}</td>
+<td style="font-size:11px">{str(exp)[5:16] if exp else '-'}</td>
+<td><a href="/admin/delete?id={tid}&token={token}" onclick="return confirm('確定刪除行程 {tid}？')" style="color:#cc0000;font-size:12px">刪除</a></td>
+</tr>"""
+
+        pair_rows = ""
+        for p in pairs:
+            ua,ma,ub,mb,cat = p
+            pair_rows += f"<tr><td>{ua[:10]}…</td><td>{ma}</td><td>{ub[:10]}…</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+
+        rating_rows = ""
+        for r in ratings:
+            rater,ratee,score,mid,cat = r
+            stars = "⭐"*int(score) if score else "-"
+            rating_rows += f"<tr><td>{rater[:10]}…</td><td>{ratee[:10]}…</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+
+        html = f"""<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sun car 管理後台</title>
+<style>
+  body{{font-family:'Noto Sans TC',sans-serif;margin:20px;color:#333;font-size:14px}}
+  h1{{color:#2c7a4b}} h2{{color:#2c7a4b;margin-top:32px;border-bottom:2px solid #d4edda;padding-bottom:4px}}
+  table{{border-collapse:collapse;width:100%;margin-top:8px}}
+  th{{background:#2c7a4b;color:#fff;padding:6px 8px;text-align:left;font-size:12px}}
+  td{{padding:5px 8px;border-bottom:1px solid #eee;font-size:13px}}
+  tr:hover{{background:#f5fff5}}
+  .stat{{display:inline-block;background:#f0f0f0;border-radius:8px;padding:8px 16px;margin:4px;font-size:15px}}
+  .stat b{{color:#2c7a4b;font-size:20px}}
+</style>
+</head>
+<body>
+<h1>🚗 sun car 順咖媒合 管理後台</h1>
+<div>
+  <span class="stat">行程總數 <b>{len(trips)}</b></span>
+  <span class="stat">配對紀錄 <b>{len(pairs)}</b></span>
+  <span class="stat">評分總數 <b>{len(ratings)}</b></span>
+  <span class="stat">均分 <b>{'%.1f'%( sum(r[2] for r in ratings)/len(ratings) if ratings else 0)}</b> ⭐</span>
+</div>
+
+<h2>行程列表（最近 200 筆）</h2>
+<table>
+<tr><th>ID</th><th>用戶</th><th>身份</th><th>時間</th><th>路線</th><th>費用</th><th>狀態</th><th>下架</th><th>操作</th></tr>
+{trip_rows}
+</table>
+
+<h2>配對紀錄（最近 100 筆）</h2>
+<table>
+<tr><th>用戶A</th><th>行程A</th><th>用戶B</th><th>行程B</th><th>時間</th></tr>
+{pair_rows}
+</table>
+
+<h2>評分紀錄（最近 100 筆）</h2>
+<table>
+<tr><th>評分者</th><th>被評者</th><th>分數</th><th>行程ID</th><th>時間</th></tr>
+{rating_rows}
+</table>
+</body></html>"""
+        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route("/admin/delete", methods=['GET'])
+def admin_delete_trip():
+    if not _check_admin_token():
+        return "<h3>401 Unauthorized</h3>", 401
+    trip_id = request.args.get('id','')
+    if not trip_id:
+        return "missing id", 400
+    try:
+        conn = get_db()
+        conn.execute(q("DELETE FROM matches WHERE id = ?"), (trip_id,))
+        conn.commit()
+        conn.close()
+        token = os.getenv('ADMIN_LINE_ID','')
+        return f"<p>✅ 行程 {trip_id} 已刪除。<a href='/admin?token={token}'>返回</a></p>", 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 @app.route("/debug-bot", methods=['GET'])
 def debug_bot():
     if not _check_admin_token():
