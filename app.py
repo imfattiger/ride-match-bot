@@ -380,7 +380,10 @@ def clean_expired_matches():
         conn = get_db()
         try:
             now = datetime.now().strftime("%Y-%m-%dT%H:%M")
-            conn.execute(q("DELETE FROM matches WHERE status = 'active' AND (expires_at < ? OR time_info < ?)"), (now, now))
+            # 出發時間已過 → 直接刪除（不論 status）
+            conn.execute(q("DELETE FROM matches WHERE time_info < ?"), (now,))
+            # 刊登到期但尚未出發 → 標記 expired（保留等用戶重新上架）
+            conn.execute(q("UPDATE matches SET status = 'expired' WHERE status = 'active' AND expires_at < ? AND time_info >= ?"), (now, now))
             # 清除超過 7 天的 pending_pushes（對方已取消訂閱或長期未互動）
             if USE_PG:
                 conn.execute(q("DELETE FROM pending_pushes WHERE created_at < NOW() - INTERVAL '7 days'"))
@@ -1896,16 +1899,17 @@ def handle_postback(event):
                 return
             conn = get_db()
             try:
-                row = conn.execute(q("SELECT user_id, s_city, e_city, expires_at FROM matches WHERE id = ? AND status = 'active'"), (match_id,)).fetchone()
+                row = conn.execute(q("SELECT user_id, s_city, e_city, expires_at FROM matches WHERE id = ? AND status IN ('active', 'expired')"), (match_id,)).fetchone()
                 if not row or row[0] != uid:
                     safe_reply(event.reply_token, TextSendMessage(text="⚠️ 只能延長自己的行程。"))
                     return
                 _, sc, ec, old_exp = row
                 try:
-                    new_exp = (datetime.strptime(str(old_exp)[:16], "%Y-%m-%dT%H:%M") + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M")
+                    base = max(datetime.strptime(str(old_exp)[:16], "%Y-%m-%dT%H:%M"), datetime.now())
+                    new_exp = (base + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M")
                 except:
                     new_exp = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M")
-                conn.execute(q("UPDATE matches SET expires_at = ?, reminded_at = NULL WHERE id = ?"), (new_exp, match_id))
+                conn.execute(q("UPDATE matches SET expires_at = ?, status = 'active', reminded_at = NULL WHERE id = ?"), (new_exp, match_id))
                 conn.commit()
             finally:
                 conn.close()
@@ -2001,7 +2005,7 @@ def handle_message(event):
         conn = get_db()
         try:
             my_matches = conn.execute(
-                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at, vehicle_type, plate_no, COALESCE(is_recurring,0), recur_weekdays FROM matches WHERE user_id = ? AND status = 'active' ORDER BY time_info DESC LIMIT 10"),
+                q("SELECT id, time_info, s_city, s_dist, e_city, e_dist, user_type, fee, line_id, view_count, expires_at, vehicle_type, plate_no, COALESCE(is_recurring,0), recur_weekdays, status FROM matches WHERE user_id = ? AND status IN ('active', 'expired') ORDER BY time_info DESC LIMIT 10"),
                 (uid,)
             ).fetchall()
             notify_on = conn.execute(q("SELECT notify_on_match FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
@@ -2014,7 +2018,8 @@ def handle_message(event):
         else:
             bubbles = []
             for m in my_matches:
-                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at, vtype, pno, is_recur, recur_wd = m
+                m_id, t_info, sc, sd, ec, ed, utype, fee, lid, vc, exp_at, vtype, pno, is_recur, recur_wd, m_status = m
+                is_expired = m_status == 'expired'
                 # 查配對次數
                 pair_conn = get_db()
                 try:
@@ -2023,8 +2028,8 @@ def handle_message(event):
                     ), (m_id, m_id)).fetchone()[0]
                 finally:
                     pair_conn.close()
-                role = "🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物"
-                hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
+                role = ("🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物") + (" ⚠️ 已過期" if is_expired else "")
+                hdr_color = "#999999" if is_expired else ("#1D9E75" if utype == 'driver' else "#1e90ff")
                 lid_text = f"@{lid}" if lid else "未設定"
                 vc_text = f"{vc or 0} 次"
                 exp_text = str(exp_at)[5:16] if exp_at else "未知"
@@ -2075,18 +2080,25 @@ def handle_message(event):
                         "contents": [{"type": "text", "text": role, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
                         "backgroundColor": hdr_color},
                     "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_items},
-                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                        {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
-                         "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
-                        {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                             "action": {"type": "postback", "label": "✏️ 改ID", "data": f"action=edit_line_id&id={m_id}"}},
-                            {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": (
+                        [
+                            {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
+                             "action": {"type": "postback", "label": "🔄 重新上架（延長 3 天）", "data": f"action=extend&id={m_id}"}},
+                            {"type": "button", "style": "secondary", "height": "sm",
                              "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
-                        ]},
-                        {"type": "button", "style": "link", "height": "sm", "color": "#888888",
-                         "action": {"type": "message", "label": notify_label, "text": notify_text}},
-                    ] + extra_btns}
+                        ] if is_expired else [
+                            {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                             "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
+                            {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                                 "action": {"type": "postback", "label": "✏️ 改ID", "data": f"action=edit_line_id&id={m_id}"}},
+                                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                                 "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
+                            ]},
+                            {"type": "button", "style": "link", "height": "sm", "color": "#888888",
+                             "action": {"type": "message", "label": notify_label, "text": notify_text}},
+                        ] + extra_btns
+                    )}
                 })
             safe_reply(event.reply_token, FlexSendMessage(
                 alt_text="我的行程",
