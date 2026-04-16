@@ -1532,7 +1532,7 @@ def admin_panel():
             token = os.getenv('ADMIN_LINE_ID','')
             trip_rows += f"""<tr>
 <td>{tid}</td>
-<td style="font-size:11px">{uid[:12]}...</td>
+<td style="font-size:11px">{(uid or '')[:12]}...</td>
 <td>{sc_badge}</td>
 <td>{str(tinfo)[5:16]}{recur_tag}</td>
 <td>{sc}{sd}→{ec}{ed}</td>
@@ -1545,13 +1545,13 @@ def admin_panel():
         pair_rows = ""
         for p in pairs:
             ua,ma,ub,mb,cat = p
-            pair_rows += f"<tr><td>{ua[:10]}…</td><td>{ma}</td><td>{ub[:10]}…</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+            pair_rows += f"<tr><td>{(ua or '')[:10]}…</td><td>{ma}</td><td>{(ub or '')[:10]}…</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
 
         rating_rows = ""
         for r in ratings:
             rater,ratee,score,mid,cat = r
             stars = "⭐"*int(score) if score else "-"
-            rating_rows += f"<tr><td>{rater[:10]}…</td><td>{ratee[:10]}…</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+            rating_rows += f"<tr><td>{(rater or '')[:10]}…</td><td>{(ratee or '')[:10]}…</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
 
         html = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
