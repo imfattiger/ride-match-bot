@@ -809,7 +809,7 @@ def get_district_flex(city, title="請選擇行政區"):
             ]
             rows.append({"type": "box", "layout": "horizontal", "spacing": "sm", "contents": row_buttons})
         bubble = {
-            "type": "bubble", "size": "kilo",
+            "type": "bubble",
             "header": {
                 "type": "box", "layout": "vertical",
                 "contents": [{"type": "text", "text": title, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
