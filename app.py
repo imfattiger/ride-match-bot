@@ -795,13 +795,13 @@ def get_main_cat_menu():
 
 def get_district_flex(city, title="請選擇行政區"):
     dists = DISTRICT_DATA.get(city, ["市中心"])
-    chunk_size = 8
+    chunk_size = 6
     bubbles = []
     for i in range(0, len(dists), chunk_size):
         chunk = dists[i:i+chunk_size]
         rows = []
-        for j in range(0, len(chunk), 4):
-            row_dists = chunk[j:j+4]
+        for j in range(0, len(chunk), 2):
+            row_dists = chunk[j:j+2]
             row_buttons = [
                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                  "action": {"type": "message", "label": d, "text": f"區:{d}"}}
