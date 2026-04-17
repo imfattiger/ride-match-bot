@@ -793,6 +793,33 @@ def get_main_cat_menu():
     ]
     return FlexSendMessage(alt_text="設定特殊需求", contents={"type": "carousel", "contents": bubbles})
 
+def get_district_flex(city, title="請選擇行政區"):
+    dists = DISTRICT_DATA.get(city, ["市中心"])
+    chunk_size = 8
+    bubbles = []
+    for i in range(0, len(dists), chunk_size):
+        chunk = dists[i:i+chunk_size]
+        rows = []
+        for j in range(0, len(chunk), 4):
+            row_dists = chunk[j:j+4]
+            row_buttons = [
+                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                 "action": {"type": "message", "label": d, "text": f"區:{d}"}}
+                for d in row_dists
+            ]
+            rows.append({"type": "box", "layout": "horizontal", "spacing": "sm", "contents": row_buttons})
+        bubble = {
+            "type": "bubble", "size": "kilo",
+            "header": {
+                "type": "box", "layout": "vertical",
+                "contents": [{"type": "text", "text": title, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+                "backgroundColor": "#2E75B6"
+            },
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": rows}
+        }
+        bubbles.append(bubble)
+    return FlexSendMessage(alt_text=title, contents={"type": "carousel", "contents": bubbles})
+
 def get_area_carousel(title="請選擇區域"):
     return TemplateSendMessage(alt_text=title, template=CarouselTemplate(columns=[
         CarouselColumn(title=title, text='台灣地區', actions=[
@@ -2736,9 +2763,7 @@ def handle_message(event):
             conn.commit()
         finally:
             conn.close()
-        dists = DISTRICT_DATA.get(c, ["市中心"])
-        btns = [QuickReplyButton(action=MessageAction(label=d, text=f"區:{d}")) for d in dists[:13]]
-        safe_reply(event.reply_token, TextSendMessage(text=f"請選擇 {c} 的行政區：", quick_reply=QuickReply(items=btns)))
+        safe_reply(event.reply_token, get_district_flex(c, f"請選擇 {c} 的行政區"))
 
     elif msg.startswith("區:"):
         d = msg.split(":")[1]
@@ -3391,70 +3416,4 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="🚗 我要載客/貨", text="我要載客/貨")),
                 QuickReplyButton(action=MessageAction(label="🙋 我要搭車/寄物", text="我要搭車/寄物")),
                 QuickReplyButton(action=MessageAction(label="📋 我的行程", text="我的行程")),
-                QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="幫助"))
-            ]
-            safe_reply(event.reply_token, TextSendMessage(
-                text="🤔 不太確定您的意思，請選擇以下功能：",
-                quick_reply=QuickReply(items=items)
-            ))
-
-# --- 10. 到期提醒 ---
-def reminder_thread():
-    while True:
-        try:
-            now = datetime.now()
-            remind_from = now.strftime("%Y-%m-%dT%H:%M")
-            remind_to = (now + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
-            conn = get_db()
-            try:
-                trips = conn.execute(q(
-                    "SELECT id, user_id, s_city, e_city, expires_at FROM matches WHERE status = 'active' AND expires_at BETWEEN ? AND ? AND reminded_at IS NULL"
-                ), (remind_from, remind_to)).fetchall()
-                for trip in trips:
-                    trip_id, user_id, sc, ec, exp_at = trip
-                    remind_flex = {
-                        "type": "bubble",
-                        "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                            {"type": "text", "text": "⏰ 行程即將下架", "weight": "bold", "size": "md"},
-                            {"type": "text", "text": f"{sc} ➔ {ec}", "size": "sm", "color": "#555555"},
-                            {"type": "text", "text": f"下架時間：{str(exp_at)[5:16]}", "size": "sm", "color": "#e07b00"},
-                        ]},
-                        "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                            {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
-                             "action": {"type": "postback", "label": "📅 延長 3 天", "data": f"action=extend&id={trip_id}"}},
-                            {"type": "button", "style": "secondary", "height": "sm",
-                             "action": {"type": "postback", "label": "🗑️ 刪除行程", "data": f"action=delete&id={trip_id}"}}
-                        ]}
-                    }
-                    safe_push(user_id, FlexSendMessage(alt_text=f"⏰ {sc}→{ec} 行程即將下架", contents=remind_flex))
-                    conn.execute(q("UPDATE matches SET reminded_at = ? WHERE id = ?"), (remind_from, trip_id))
-                conn.commit()
-            finally:
-                conn.close()
-        except Exception as e:
-            logging.error(f"Reminder thread error: {e}")
-        time.sleep(1800)
-
-# --- 11. Keep Alive ---
-# 注意：Render free tier 進程若被殺，self-ping 也一起死。
-# 建議同時設定 UptimeRobot 每 5 分鐘 ping /ping endpoint 作為外部保活。
-def keep_alive():
-    url = os.getenv('RENDER_EXTERNAL_URL', 'https://ride-match-bot.onrender.com') + '/ping'
-    while True:
-        try:
-            requests.get(url, timeout=10)
-            logging.info(f"Keep alive ping: {url}")
-        except Exception as e:
-            logging.error(f"Keep alive failed: {e}")
-        time.sleep(540)  # 9 分鐘，確保 Render 15 分鐘休眠窗口內 ping 兩次
-
-# Render 環境下在模組層級啟動 keep_alive（gunicorn 不會跑 __main__）
-if os.getenv('RENDER'):
-    threading.Thread(target=keep_alive, daemon=True).start()
-    threading.Thread(target=reminder_thread, daemon=True).start()
-
-if __name__ == "__main__":
-    threading.Thread(target=keep_alive, daemon=True).start()
-    threading.Thread(target=reminder_thread, daemon=True).start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+                QuickReplyButton(action=MessageAction(label="❓ 使用說明",
