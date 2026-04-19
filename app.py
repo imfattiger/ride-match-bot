@@ -1012,23 +1012,23 @@ def get_welcome_flex():
         "footer": {
             "type": "box", "layout": "vertical", "spacing": "sm",
             "contents": [
-                {"type": "button", "style": "primary", "color": "#00b900", "height": "sm",
+                {"type": "button", "style": "primary", "color": "#00A878", "height": "sm",
                  "action": {"type": "message", "label": "🚗 我要載客/貨", "text": "我要載客/貨"}},
-                {"type": "button", "style": "primary", "color": "#1e90ff", "height": "sm",
+                {"type": "button", "style": "primary", "color": "#3B82F6", "height": "sm",
                  "action": {"type": "message", "label": "🙋 我要搭車/寄物", "text": "我要搭車/寄物"}},
-                {"type": "button", "style": "primary", "color": "#1e90ff", "height": "sm",
+                {"type": "button", "style": "primary", "color": "#F97316", "height": "sm",
                  "action": {"type": "message", "label": "🔍 瀏覽現有行程", "text": "找行程"}},
-                {"type": "button", "style": "secondary", "height": "sm",
+                {"type": "button", "style": "primary", "color": "#4B5563", "height": "sm",
                  "action": {"type": "message", "label": "📋 媒合規則說明", "text": "媒合規則"}},
-                {"type": "button", "style": "secondary", "height": "sm",
+                {"type": "button", "style": "primary", "color": "#6B7280", "height": "sm",
                  "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}},
-                {"type": "button", "style": "secondary", "height": "sm",
+                {"type": "button", "style": "primary", "color": "#1D4ED8", "height": "sm",
                  "action": {"type": "uri", "label": "🏘️ 加入 FB 共乘社團", "uri": "https://www.facebook.com/share/g/1B6rh1hBKV/"}},
-                {"type": "button", "style": "secondary", "height": "sm",
+                {"type": "button", "style": "primary", "color": "#1E3A5F", "height": "sm",
                  "action": {"type": "uri", "label": "📢 FB 粉專（最新消息／維修回報）", "uri": "https://www.facebook.com/profile.php?id=61572149019298"}},
-                {"type": "button", "style": "link", "height": "sm", "color": "#aaaaaa",
+                {"type": "button", "style": "primary", "color": "#78350F", "height": "sm",
                  "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}},
-                {"type": "button", "style": "primary", "height": "sm", "color": "#CC0000",
+                {"type": "button", "style": "primary", "color": "#991B1B", "height": "sm",
                  "action": {"type": "message", "label": "⚖️ 免責聲明與使用條款", "text": "免責聲明"}}
             ]
         }
