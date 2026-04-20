@@ -259,6 +259,9 @@ SCHEMA_MIGRATIONS = [
          "ALTER TABLE user_state ADD COLUMN referral_source TEXT"),
     (32, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS referral_source TEXT",
          "ALTER TABLE matches ADD COLUMN referral_source TEXT"),
+    (33,
+     "CREATE TABLE IF NOT EXISTS reports (id SERIAL PRIMARY KEY, reporter_uid TEXT, target_uid TEXT, trip_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+     "CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_uid TEXT, target_uid TEXT, trip_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -1569,6 +1572,9 @@ def admin_panel():
         ratings = conn.execute(q(
             "SELECT rater_id, ratee_id, score, match_id, created_at FROM ratings ORDER BY created_at DESC LIMIT 100"
         )).fetchall()
+        reports = conn.execute(q(
+            "SELECT id, reporter_uid, target_uid, trip_id, status, created_at FROM reports ORDER BY created_at DESC LIMIT 100"
+        )).fetchall()
         conn.close()
 
         status_color = {'active':'#1D9E75','expired':'#999','completed':'#1e90ff','cancelled':'#cc0000'}
@@ -1602,6 +1608,26 @@ def admin_panel():
             rater,ratee,score,mid,cat = r
             stars = "⭐"*int(score) if score else "-"
             rating_rows += f"<tr><td>{(rater or '')[:10]}…</td><td>{(ratee or '')[:10]}…</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+
+        token = os.getenv('ADMIN_LINE_ID','')
+        report_rows = ""
+        for rp in reports:
+            rp_id,rp_reporter,rp_target,rp_trip,rp_status,rp_cat = rp
+            status_badge = "🔴 待處理" if rp_status == 'pending' else "✅ 已處理"
+            report_rows += (
+                f"<tr>"
+                f"<td>{rp_id}</td>"
+                f"<td style='font-size:11px'>{(rp_reporter or '')[:12]}…</td>"
+                f"<td style='font-size:11px'>{(rp_target or '')[:12]}…</td>"
+                f"<td>{rp_trip or '-'}</td>"
+                f"<td>{status_badge}</td>"
+                f"<td style='font-size:11px'>{str(rp_cat)[:16]}</td>"
+                f"<td style='font-size:11px'>"
+                f"<a href='/admin/resolve_report?id={rp_id}&token={token}' style='color:#1D9E75;margin-right:8px'>✅標記處理</a>"
+                f"<a href='/admin/delete?id={rp_trip}&token={token}' onclick=\"return confirm('確定刪除行程 {rp_trip}？')\" style='color:#cc0000'>刪行程</a>"
+                f"</td>"
+                f"</tr>"
+            )
 
         html = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -1646,6 +1672,12 @@ def admin_panel():
 <tr><th>評分者</th><th>被評者</th><th>分數</th><th>行程ID</th><th>時間</th></tr>
 {rating_rows}
 </table>
+
+<h2>檢舉紀錄（最近 100 筆）</h2>
+<table>
+<tr><th>ID</th><th>檢舉者</th><th>被檢舉</th><th>行程ID</th><th>狀態</th><th>時間</th><th>操作</th></tr>
+{report_rows}
+</table>
 </body></html>"""
         return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
     except Exception as e:
@@ -1665,6 +1697,23 @@ def admin_delete_trip():
         conn.close()
         token = os.getenv('ADMIN_LINE_ID','')
         return f"<p>✅ 行程 {trip_id} 已刪除。<a href='/admin?token={token}'>返回</a></p>", 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route("/admin/resolve_report", methods=['GET'])
+def admin_resolve_report():
+    if not _check_admin_token():
+        return "<h3>401 Unauthorized</h3>", 401
+    report_id = request.args.get('id','')
+    if not report_id:
+        return "missing id", 400
+    try:
+        conn = get_db()
+        conn.execute(q("UPDATE reports SET status = 'resolved' WHERE id = ?"), (report_id,))
+        conn.commit()
+        conn.close()
+        token = os.getenv('ADMIN_LINE_ID','')
+        return f"<p>✅ 檢舉 {report_id} 已標記處理。<a href='/admin?token={token}'>返回</a></p>", 200, {'Content-Type': 'text/html; charset=utf-8'}
     except Exception as e:
         return {"error": str(e)}, 500
 
@@ -1899,9 +1948,35 @@ def handle_postback(event):
             params = dict(parse_qsl(data))
             target_uid = params.get('uid', '')
             trip_id = params.get('trip_id', '')
+            # 寫入 reports 表
+            try:
+                _rc = get_db()
+                try:
+                    if USE_PG:
+                        _rc.execute(q("INSERT INTO reports (reporter_uid, target_uid, trip_id) VALUES (?,?,?)"), (uid, target_uid, trip_id))
+                    else:
+                        _rc.execute("INSERT INTO reports (reporter_uid, target_uid, trip_id) VALUES (?,?,?)", (uid, target_uid, trip_id))
+                    _rc.commit()
+                finally:
+                    _rc.close()
+            except Exception:
+                pass
+            # 通知 admin：附行程內容
             if ADMIN_LINE_ID and target_uid:
+                trip_detail = ""
+                try:
+                    _tc = get_db()
+                    try:
+                        _tr = _tc.execute(q("SELECT user_type, time_info, s_city, s_dist, e_city, e_dist, fee, prefs FROM matches WHERE id = ?"), (trip_id,)).fetchone()
+                    finally:
+                        _tc.close()
+                    if _tr:
+                        utype_label = "司機" if _tr[0] == 'driver' else "乘客"
+                        trip_detail = f"\n\n📋 行程內容\n身份：{utype_label}\n時間：{str(_tr[1])[5:16]}\n路線：{_tr[2]}{_tr[3]}→{_tr[4]}{_tr[5]}\n費用：{_tr[6] or '未填'}\n備註：{_tr[7] or '無'}"
+                except Exception:
+                    pass
                 safe_push(ADMIN_LINE_ID, TextSendMessage(
-                    text=f"🚨 檢舉通報\n被檢舉用戶：{target_uid}\n行程編號：{trip_id}\n檢舉者：{uid}\n\n如需封鎖請回覆：/ban {target_uid}"
+                    text=f"🚨 檢舉通報\n被檢舉用戶：{target_uid}\n行程編號：{trip_id}\n檢舉者：{uid}{trip_detail}\n\n指令：\n/contact {uid}（聯絡檢舉者）\n/ban {target_uid}（封鎖被檢舉者）\n/info {target_uid}（查用戶紀錄）"
                 ))
             safe_reply(event.reply_token, TextSendMessage(text="✅ 已送出檢舉，我們會盡快處理。感謝你的回報！"))
 
