@@ -97,8 +97,15 @@ DISTRICT_GROUPS = {
         "市區": ["桃園區", "中壢區", "八德區", "平鎮區"],
         "南": ["楊梅區", "新屋區", "觀音區"],
         "東": ["大溪區", "復興區"]
+    },
+    "基隆市": {
+        "市區": ["仁愛區", "中正區", "信義區", "中山區"],
+        "西": ["安樂區"],
+        "東": ["七堵區", "暖暖區"]
     }
 }
+
+KEELUNG_CORRIDOR_CITIES = {"基隆市", "台北市", "新北市"}
 
 def get_district_cluster(city, dist):
     groups = DISTRICT_GROUPS.get(city)
@@ -248,6 +255,10 @@ SCHEMA_MIGRATIONS = [
          "ALTER TABLE matches ADD COLUMN daily_push_date TEXT"),
     (30, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS daily_push_count INTEGER DEFAULT 0",
          "ALTER TABLE matches ADD COLUMN daily_push_count INTEGER DEFAULT 0"),
+    (31, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS referral_source TEXT",
+         "ALTER TABLE user_state ADD COLUMN referral_source TEXT"),
+    (32, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS referral_source TEXT",
+         "ALTER TABLE matches ADD COLUMN referral_source TEXT"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -1149,11 +1160,11 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
 def do_publish(uid, reply_token):
     conn = get_db()
     try:
-        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire, temp_vehicle, temp_plate, temp_recur_days FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+        res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire, temp_vehicle, temp_plate, temp_recur_days, referral_source FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
         if not res:
             safe_reply(reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
-        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp, vt, pn, recur_days = res
+        ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp, vt, pn, recur_days, ref_src = res
         lid = lid or ''
         vt = vt or ''
         pn = pn or ''
@@ -1175,16 +1186,16 @@ def do_publish(uid, reply_token):
         # 防重複發布（原子性：唯一索引 + ON CONFLICT，避免競態條件）
         cursor = conn.cursor()
         if USE_PG:
-            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no, is_recurring, recur_weekdays) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id'),
-                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None))
+            cursor.execute(q('INSERT INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no, is_recurring, recur_weekdays, referral_source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id'),
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None, ref_src or None))
             row = cursor.fetchone()
             if row is None:
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
                 return
             new_id = row[0]
         else:
-            cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no, is_recurring, recur_weekdays) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None))
+            cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no, is_recurring, recur_weekdays, referral_source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                           (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None, ref_src or None))
             new_id = cursor.lastrowid
             if not new_id:
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
@@ -1302,13 +1313,23 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     conn = get_db()
     c = conn.cursor()
 
+    is_keelung_corridor = (
+        "基隆市" in (sc, ec)
+        and sc in KEELUNG_CORRIDOR_CITIES
+        and ec in KEELUNG_CORRIDOR_CITIES
+        and sc != ec
+    )
     try:
         base_t = datetime.strptime(t_info, "%Y-%m-%dT%H:%M")
-        buffer = 4 if "願意" in flex else 1
+        if "願意" in flex:
+            buffer = 5 if is_keelung_corridor else 4
+        else:
+            buffer = 1.5 if is_keelung_corridor else 1
         s_range = (base_t - timedelta(hours=buffer)).strftime("%Y-%m-%dT%H:%M")
         e_range = (base_t + timedelta(hours=buffer)).strftime("%Y-%m-%dT%H:%M")
     except:
         s_range, e_range = t_info, t_info
+        buffer = 1
 
     if sc == ec:
         user_direction = 0  # 明確同縣市
@@ -2126,6 +2147,27 @@ def handle_message(event):
         _flush_last[uid] = time.time()
         threading.Thread(target=flush_pending_pushes, args=(uid,), daemon=True).start()
 
+    # --- 來源登記（社群推廣追蹤）---
+    ref_map = {
+        "基隆共乘plus": "keelung_group",
+        "基隆共乘 plus": "keelung_group",
+        "基隆共乘": "keelung_group",
+    }
+    ref_tag = None
+    if msg in ref_map:
+        ref_tag = ref_map[msg]
+    elif msg.startswith("/ref "):
+        ref_tag = msg[5:].strip()[:40] or None
+    if ref_tag:
+        conn = get_db()
+        try:
+            conn.execute(q("UPDATE user_state SET referral_source = ? WHERE user_id = ?"), (ref_tag, uid))
+            conn.commit()
+        finally:
+            conn.close()
+        safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已登記來源：{ref_tag}\n\n感謝你從社群加入！接下來發布行程時會自動標記這筆來源，幫我們追蹤成效 🙏"))
+        return
+
     # --- 有新配對嗎 ---
     if msg in ["有新配對嗎", "新配對", "配對通知"]:
         conn = get_db()
@@ -2665,6 +2707,29 @@ def handle_message(event):
                 f"📤 {month_key} 推播：{quota_text}"
             )
         ))
+        return
+
+    elif msg in ["/ref_stats", "/refstats"] and uid == ADMIN_LINE_ID:
+        conn = get_db()
+        try:
+            user_rows = conn.execute(q(
+                "SELECT COALESCE(referral_source,'(none)') AS src, COUNT(*) FROM user_state "
+                "WHERE agreed_terms = 1 GROUP BY src ORDER BY COUNT(*) DESC"
+            )).fetchall()
+            trip_rows = conn.execute(q(
+                "SELECT COALESCE(referral_source,'(none)') AS src, COUNT(*) FROM matches "
+                "GROUP BY src ORDER BY COUNT(*) DESC"
+            )).fetchall()
+        finally:
+            conn.close()
+        lines = ["📊 來源追蹤", "━━━━━━━━━━━━", "👤 用戶數（同意條款）"]
+        for src, cnt in user_rows:
+            lines.append(f"  • {src}: {cnt}")
+        lines.append("━━━━━━━━━━━━")
+        lines.append("🚗 發布行程數")
+        for src, cnt in trip_rows:
+            lines.append(f"  • {src}: {cnt}")
+        safe_reply(event.reply_token, TextSendMessage(text="\n".join(lines)))
         return
 
     elif msg.startswith("/info ") and uid == ADMIN_LINE_ID:
