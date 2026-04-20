@@ -2778,6 +2778,17 @@ def handle_message(event):
         safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已封鎖用戶：{target}"))
         return
 
+    elif msg.startswith("/contact ") and uid == ADMIN_LINE_ID:
+        target = msg[9:].strip()
+        try:
+            line_bot_api.push_message(target, TextSendMessage(
+                text="您好，我是 sun car 順咖媒合的管理員。\n\n收到您的檢舉通報，想進一步了解發生了什麼狀況，方便說明一下嗎？\n\n感謝您協助維護社群品質 🙏"
+            ))
+            safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已傳送訊息給：{target}"))
+        except Exception as e:
+            safe_reply(event.reply_token, TextSendMessage(text=f"⚠️ 傳送失敗：{e}"))
+        return
+
     elif msg.startswith("/unban ") and uid == ADMIN_LINE_ID:
         target = msg[7:].strip()
         conn = get_db()
