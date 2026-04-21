@@ -1717,6 +1717,114 @@ def admin_resolve_report():
     except Exception as e:
         return {"error": str(e)}, 500
 
+@app.route("/admin/community", methods=['GET'])
+def admin_community():
+    if not _check_admin_token():
+        return "<h3>401 Unauthorized</h3>", 401
+    try:
+        conn = get_db()
+        # 取得所有基隆社群用戶
+        users = conn.execute(q(
+            "SELECT user_id FROM user_state WHERE referral_source = 'keelung_group'"
+        )).fetchall()
+        user_ids = [row[0] for row in users]
+
+        # 取得所有相關行程
+        trips_by_user = {}
+        if user_ids:
+            placeholders = ','.join(['?' if not USE_PG else '%s'] * len(user_ids))
+            all_trips = conn.execute(
+                f"SELECT user_id, id, s_city, s_dist, e_city, e_dist, time_info, status, created_at FROM matches WHERE user_id IN ({placeholders}) ORDER BY created_at DESC",
+                user_ids
+            ).fetchall()
+            for row in all_trips:
+                uid = row[0]
+                trips_by_user.setdefault(uid, []).append(row[1:])
+
+        # 取得配對數
+        pair_counts = {}
+        if user_ids:
+            placeholders = ','.join(['?' if not USE_PG else '%s'] * len(user_ids))
+            pairs_a = conn.execute(
+                f"SELECT uid_a, COUNT(*) FROM pairs WHERE uid_a IN ({placeholders}) GROUP BY uid_a",
+                user_ids
+            ).fetchall()
+            pairs_b = conn.execute(
+                f"SELECT uid_b, COUNT(*) FROM pairs WHERE uid_b IN ({placeholders}) GROUP BY uid_b",
+                user_ids
+            ).fetchall()
+            for uid, cnt in pairs_a:
+                pair_counts[uid] = pair_counts.get(uid, 0) + cnt
+            for uid, cnt in pairs_b:
+                pair_counts[uid] = pair_counts.get(uid, 0) + cnt
+
+        conn.close()
+
+        status_color = {'active': '#1D9E75', 'expired': '#999', 'completed': '#1e90ff', 'cancelled': '#cc0000'}
+        rows = ""
+        for (uid,) in users:
+            trips = trips_by_user.get(uid, [])
+            total = len(trips)
+            active = sum(1 for t in trips if t[6] == 'active')
+            pairs_cnt = pair_counts.get(uid, 0)
+            # trips sorted DESC by created_at already; first = latest
+            latest = trips[0] if trips else None
+            if latest:
+                tid, sc, sd, ec, ed, tinfo, sts, cat = latest
+                color = status_color.get(sts, '#888')
+                latest_cell = f"{sc}{sd}→{ec}{ed}<br><small style='color:{color}'>{str(tinfo)[5:16]} {sts}</small>"
+                join_time = str(trips[-1][7])[:16] if trips else '-'  # earliest trip
+            else:
+                latest_cell = '-'
+                join_time = '-'
+            rows += (
+                f"<tr>"
+                f"<td style='font-size:11px'>{(uid or '')[:12]}…</td>"
+                f"<td style='font-size:12px'>{join_time}</td>"
+                f"<td style='text-align:center'>{total}</td>"
+                f"<td style='text-align:center;color:#1D9E75;font-weight:bold'>{active}</td>"
+                f"<td style='text-align:center;color:#1e90ff'>{pairs_cnt}</td>"
+                f"<td style='font-size:12px'>{latest_cell}</td>"
+                f"</tr>"
+            )
+
+        token = request.args.get('token', '')
+        html = f"""<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>基隆社群用戶</title>
+<style>
+  body{{font-family:'Noto Sans TC',sans-serif;margin:20px;color:#333;font-size:14px}}
+  h1{{color:#2c7a4b}} h2{{color:#2c7a4b;margin-top:16px;border-bottom:2px solid #d4edda;padding-bottom:4px}}
+  table{{border-collapse:collapse;width:100%;margin-top:8px}}
+  th{{background:#2c7a4b;color:#fff;padding:6px 8px;text-align:left;font-size:12px}}
+  td{{padding:5px 8px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}}
+  tr:hover{{background:#f5fff5}}
+  .stat{{display:inline-block;background:#f0f0f0;border-radius:8px;padding:8px 16px;margin:4px;font-size:15px}}
+  .stat b{{color:#2c7a4b;font-size:20px}}
+  .back{{color:#2c7a4b;font-size:13px;text-decoration:none}}
+</style>
+</head>
+<body>
+<h1>🐟 基隆社群用戶管理</h1>
+<a class="back" href="/admin?token={token}">← 返回後台</a>
+<div style="margin-top:12px">
+  <span class="stat">社群用戶數 <b>{len(users)}</b></span>
+  <span class="stat">發過行程 <b>{sum(1 for uid, in users if trips_by_user.get(uid))}</b></span>
+  <span class="stat">總配對數 <b>{sum(pair_counts.values())}</b></span>
+</div>
+<h2>用戶列表</h2>
+<table>
+<tr><th>用戶ID（前12碼）</th><th>加入時間（首次行程）</th><th>總行程數</th><th>Active</th><th>成功配對</th><th>最近行程</th></tr>
+{rows if rows else '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">尚無基隆社群用戶</td></tr>'}
+</table>
+</body></html>"""
+        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 @app.route("/debug-bot", methods=['GET'])
 def debug_bot():
     if not _check_admin_token():
