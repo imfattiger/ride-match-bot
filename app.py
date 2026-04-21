@@ -2892,6 +2892,36 @@ def handle_message(event):
         ))
         return
 
+    elif msg.startswith("/broadcast_keelung") and uid == ADMIN_LINE_ID:
+        conn = get_db()
+        try:
+            targets = conn.execute(q(
+                "SELECT user_id FROM user_state WHERE referral_source = 'keelung_group' AND agreed_terms = 1"
+            )).fetchall()
+        finally:
+            conn.close()
+        if not targets:
+            safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到基隆群用戶。"))
+            return
+        push_text = (
+            "嗨！你好 👋\n\n"
+            "你之前加入了 sun car 順咖媒合，但還沒有發過行程喔～\n\n"
+            "發一筆行程只要 30 秒：\n"
+            "1️⃣ 點下方「我要載客/貨」或「我要搭車/寄物」\n"
+            "2️⃣ 填好時間和路線\n"
+            "3️⃣ 系統自動幫你配對，有人搭就通知你\n\n"
+            "基隆↔台北/南港/內科這條線現在有人在等配對，趕快來試試 🚗"
+        )
+        success, fail = 0, 0
+        for (target_uid,) in targets:
+            try:
+                line_bot_api.push_message(target_uid, TextSendMessage(text=push_text))
+                success += 1
+            except Exception:
+                fail += 1
+        safe_reply(event.reply_token, TextSendMessage(text=f"✅ 廣播完成\n成功：{success} 人\n失敗：{fail} 人"))
+        return
+
     elif msg in ["/ref_stats", "/refstats"] and uid == ADMIN_LINE_ID:
         conn = get_db()
         try:
