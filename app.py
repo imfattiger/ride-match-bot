@@ -1588,7 +1588,7 @@ def admin_panel():
             token = os.getenv('ADMIN_LINE_ID','')
             trip_rows += f"""<tr>
 <td>{tid}</td>
-<td style="font-size:11px">{(uid or '')[:12]}...</td>
+<td style="font-size:11px" title="{uid}">{(uid or '')[:20]}…</td>
 <td>{sc_badge}</td>
 <td>{str(tinfo)[5:16]}{recur_tag}</td>
 <td>{sc}{sd}→{ec}{ed}</td>
@@ -1601,13 +1601,13 @@ def admin_panel():
         pair_rows = ""
         for p in pairs:
             ua,ma,ub,mb,cat = p
-            pair_rows += f"<tr><td>{(ua or '')[:10]}…</td><td>{ma}</td><td>{(ub or '')[:10]}…</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+            pair_rows += f"<tr><td style='font-size:11px' title='{ua}'>{(ua or '')[:20]}…</td><td>{ma}</td><td style='font-size:11px' title='{ub}'>{(ub or '')[:20]}…</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
 
         rating_rows = ""
         for r in ratings:
             rater,ratee,score,mid,cat = r
             stars = "⭐"*int(score) if score else "-"
-            rating_rows += f"<tr><td>{(rater or '')[:10]}…</td><td>{(ratee or '')[:10]}…</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+            rating_rows += f"<tr><td style='font-size:11px' title='{rater}'>{(rater or '')[:20]}…</td><td style='font-size:11px' title='{ratee}'>{(ratee or '')[:20]}…</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
 
         token = os.getenv('ADMIN_LINE_ID','')
         report_rows = ""
@@ -1617,8 +1617,8 @@ def admin_panel():
             report_rows += (
                 f"<tr>"
                 f"<td>{rp_id}</td>"
-                f"<td style='font-size:11px'>{(rp_reporter or '')[:12]}…</td>"
-                f"<td style='font-size:11px'>{(rp_target or '')[:12]}…</td>"
+                f"<td style='font-size:11px' title='{rp_reporter}'>{(rp_reporter or '')[:20]}…</td>"
+                f"<td style='font-size:11px' title='{rp_target}'>{(rp_target or '')[:20]}…</td>"
                 f"<td>{rp_trip or '-'}</td>"
                 f"<td>{status_badge}</td>"
                 f"<td style='font-size:11px'>{str(rp_cat)[:16]}</td>"
@@ -1779,7 +1779,7 @@ def admin_community():
                 join_time = '-'
             rows += (
                 f"<tr>"
-                f"<td style='font-size:11px'>{(uid or '')[:12]}…</td>"
+                f"<td style='font-size:11px' title='{uid}'>{(uid or '')[:20]}…</td>"
                 f"<td style='font-size:12px'>{join_time}</td>"
                 f"<td style='text-align:center'>{total}</td>"
                 f"<td style='text-align:center;color:#1D9E75;font-weight:bold'>{active}</td>"
