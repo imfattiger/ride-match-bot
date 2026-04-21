@@ -2059,37 +2059,20 @@ def handle_postback(event):
             params = dict(parse_qsl(data))
             target_uid = params.get('uid', '')
             trip_id = params.get('trip_id', '')
-            # 寫入 reports 表
+            # 先要求用戶說明原因，暫存 step
+            conn = get_db()
             try:
-                _rc = get_db()
-                try:
-                    if USE_PG:
-                        _rc.execute(q("INSERT INTO reports (reporter_uid, target_uid, trip_id) VALUES (?,?,?)"), (uid, target_uid, trip_id))
-                    else:
-                        _rc.execute("INSERT INTO reports (reporter_uid, target_uid, trip_id) VALUES (?,?,?)", (uid, target_uid, trip_id))
-                    _rc.commit()
-                finally:
-                    _rc.close()
-            except Exception:
-                pass
-            # 通知 admin：附行程內容
-            if ADMIN_LINE_ID and target_uid:
-                trip_detail = ""
-                try:
-                    _tc = get_db()
-                    try:
-                        _tr = _tc.execute(q("SELECT user_type, time_info, s_city, s_dist, e_city, e_dist, fee, prefs FROM matches WHERE id = ?"), (trip_id,)).fetchone()
-                    finally:
-                        _tc.close()
-                    if _tr:
-                        utype_label = "司機" if _tr[0] == 'driver' else "乘客"
-                        trip_detail = f"\n\n📋 行程內容\n身份：{utype_label}\n時間：{str(_tr[1])[5:16]}\n路線：{_tr[2]}{_tr[3]}→{_tr[4]}{_tr[5]}\n費用：{_tr[6] or '未填'}\n備註：{_tr[7] or '無'}"
-                except Exception:
-                    pass
-                safe_push(ADMIN_LINE_ID, TextSendMessage(
-                    text=f"🚨 檢舉通報\n被檢舉用戶：{target_uid}\n行程編號：{trip_id}\n檢舉者：{uid}{trip_detail}\n\n指令：\n/contact {uid}（聯絡檢舉者）\n/ban {target_uid}（封鎖被檢舉者）\n/info {target_uid}（查用戶紀錄）"
-                ))
-            safe_reply(event.reply_token, TextSendMessage(text="✅ 已送出檢舉，我們會盡快處理。感謝你的回報！"))
+                if USE_PG:
+                    conn.execute(q("INSERT INTO user_state (user_id, step) VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step"), (uid, f"REPORT:{target_uid}:{trip_id}"))
+                else:
+                    conn.execute("INSERT OR IGNORE INTO user_state (user_id) VALUES (?)", (uid,))
+                    conn.execute("UPDATE user_state SET step = ? WHERE user_id = ?", (f"REPORT:{target_uid}:{trip_id}", uid))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, TextSendMessage(
+                text="請簡單說明檢舉原因（例如：詐騙、騷擾、不實資訊等），說明後系統會自動送出檢舉。\n\n若不想檢舉，請回傳「取消」。"
+            ))
 
         elif data.startswith("action=edit_line_id"):
             params = dict(parse_qsl(data))
@@ -2996,11 +2979,14 @@ def handle_message(event):
         return
 
     elif msg.startswith("/contact ") and uid == ADMIN_LINE_ID:
-        target = msg[9:].strip()
+        parts = msg[9:].strip().split(' ', 1)
+        target = parts[0].strip()
+        custom_msg = parts[1].strip() if len(parts) > 1 else None
+        push_text = custom_msg if custom_msg else (
+            "您好，我是 sun car 順咖媒合的管理員。\n\n收到您的檢舉通報，想進一步了解發生了什麼狀況，方便說明一下嗎？\n\n感謝您協助維護社群品質 🙏"
+        )
         try:
-            line_bot_api.push_message(target, TextSendMessage(
-                text="您好，我是 sun car 順咖媒合的管理員。\n\n收到您的檢舉通報，想進一步了解發生了什麼狀況，方便說明一下嗎？\n\n感謝您協助維護社群品質 🙏"
-            ))
+            line_bot_api.push_message(target, TextSendMessage(text=push_text))
             safe_reply(event.reply_token, TextSendMessage(text=f"✅ 已傳送訊息給：{target}"))
         except Exception as e:
             safe_reply(event.reply_token, TextSendMessage(text=f"⚠️ 傳送失敗：{e}"))
@@ -3532,6 +3518,54 @@ def handle_message(event):
             safe_reply(event.reply_token, TextSendMessage(text="✅ 已收到！感謝你的回饋，我們會持續改善 🙏"))
             return
 
+        # 處理檢舉原因輸入
+        if res and res[0] and res[0].startswith('REPORT:'):
+            parts = res[0].split(':', 2)
+            target_uid = parts[1] if len(parts) > 1 else ''
+            trip_id = parts[2] if len(parts) > 2 else ''
+            conn = get_db()
+            try:
+                conn.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+                conn.commit()
+            finally:
+                conn.close()
+            if msg.strip() == '取消':
+                safe_reply(event.reply_token, TextSendMessage(text="已取消檢舉。"))
+                return
+            reason = msg.strip()
+            # 寫入 reports 表
+            try:
+                _rc = get_db()
+                try:
+                    if USE_PG:
+                        _rc.execute(q("INSERT INTO reports (reporter_uid, target_uid, trip_id) VALUES (?,?,?)"), (uid, target_uid, trip_id))
+                    else:
+                        _rc.execute("INSERT INTO reports (reporter_uid, target_uid, trip_id) VALUES (?,?,?)", (uid, target_uid, trip_id))
+                    _rc.commit()
+                finally:
+                    _rc.close()
+            except Exception:
+                pass
+            # 通知 admin：附行程內容 + 原因
+            if ADMIN_LINE_ID and target_uid:
+                trip_detail = ""
+                try:
+                    _tc = get_db()
+                    try:
+                        _tr = _tc.execute(q("SELECT user_type, time_info, s_city, s_dist, e_city, e_dist, fee, prefs FROM matches WHERE id = ?"), (trip_id,)).fetchone()
+                    finally:
+                        _tc.close()
+                    if _tr:
+                        utype_label = "司機" if _tr[0] == 'driver' else "乘客"
+                        trip_detail = f"\n\n📋 行程內容\n身份：{utype_label}\n時間：{str(_tr[1])[5:16]}\n路線：{_tr[2]}{_tr[3]}→{_tr[4]}{_tr[5]}\n費用：{_tr[6] or '未填'}\n備註：{_tr[7] or '無'}"
+                except Exception:
+                    pass
+                safe_push(ADMIN_LINE_ID, TextSendMessage(
+                    text=f"🚨 檢舉通報\n被檢舉用戶：{target_uid}\n行程編號：{trip_id}\n檢舉者：{uid}\n檢舉原因：{reason}{trip_detail}\n\n指令：\n/contact {uid}（聯絡檢舉者）\n/ban {target_uid}（封鎖被檢舉者）\n/info {target_uid}（查用戶紀錄）"
+                ))
+            safe_reply(event.reply_token, TextSendMessage(text="✅ 已送出檢舉，我們會盡快處理。感謝你的回報！"))
+            return
+
         # 處理編輯行程 LINE ID
         if res and res[0] and res[0].startswith('EDIT_LINE_ID:'):
             match_id = res[0].split(':', 1)[1]
@@ -3707,6 +3741,11 @@ def handle_message(event):
                 quick_reply=QuickReply(items=items)
             ))
         else:
+            # 轉發給 admin（可能是用戶主動回覆管理員訊息）
+            if ADMIN_LINE_ID and uid != ADMIN_LINE_ID:
+                safe_push(ADMIN_LINE_ID, TextSendMessage(
+                    text=f"💬 用戶訊息轉發\nUID：{uid}\n\n{msg}\n\n回覆請用：/contact {uid} <你的訊息>"
+                ))
             items = [
                 QuickReplyButton(action=MessageAction(label="🚗 我要載客/貨", text="我要載客/貨")),
                 QuickReplyButton(action=MessageAction(label="🙋 我要搭車/寄物", text="我要搭車/寄物")),
