@@ -1649,6 +1649,7 @@ def admin_panel():
 </head>
 <body>
 <h1>🚗 sun car 順咖媒合 管理後台</h1>
+<a href="/admin/community?token={os.getenv('ADMIN_SECRET','')}" style="color:#2c7a4b;font-size:13px;text-decoration:none">🐟 基隆社群用戶管理 →</a>
 <div>
   <span class="stat">行程總數 <b>{len(trips)}</b></span>
   <span class="stat">配對紀錄 <b>{len(pairs)}</b></span>
