@@ -1110,12 +1110,15 @@ def get_rules_flex():
     return FlexSendMessage(alt_text="媒合規則說明", contents=bubble)
 
 # --- 被動媒合推播 Flex 卡片 ---
-def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no=""):
+def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no="", match_id=""):
     prefs_text = prefs.strip().rstrip(",") if prefs else "（未設定）"
     contact_contents = [{"type": "text", "text": "有人發布了與您同向的行程！", "size": "xs", "color": "#888888", "align": "center"}]
     if line_id:
         contact_contents.append({"type": "button", "style": "primary", "height": "sm", "color": "#00b900", "margin": "sm",
             "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{line_id}"}})
+    elif match_id:
+        contact_contents.append({"type": "button", "style": "primary", "height": "sm", "color": "#E07B00", "margin": "sm",
+            "action": {"type": "postback", "label": "📋 補填 LINE ID", "data": f"action=fill_line_id&match_id={match_id}"}})
 
     # 解析 way_point 取上下車地點（格式：接受中途|上車:XXX|下車:YYY）
     body_contents = [
@@ -1287,7 +1290,7 @@ def do_publish(uid, reply_token):
             finally:
                 limit_conn.close()
             if is_notify_enabled(m[0]):
-                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt, pn))
+                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt, pn, match_id=m[11]))
 
         rating_conn.close()
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
@@ -2188,6 +2191,25 @@ def handle_postback(event):
             finally:
                 conn.close()
             safe_reply(event.reply_token, TextSendMessage(text="請直接輸入你的 LINE ID（如 @abc123），我們會立即傳給對方："))
+
+        elif data.startswith("action=fill_line_id"):
+            params = dict(parse_qsl(data))
+            match_id = params.get('match_id', '')
+            conn = get_db()
+            try:
+                if USE_PG:
+                    conn.execute(q('''INSERT INTO user_state (user_id, step)
+                        VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET step = EXCLUDED.step'''),
+                        (uid, f'FILL_LINE_ID:{match_id}'))
+                else:
+                    conn.execute('INSERT OR REPLACE INTO user_state (user_id, step) VALUES (?, ?)',
+                        (uid, f'FILL_LINE_ID:{match_id}'))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, TextSendMessage(
+                text="請輸入您的 LINE ID（輸入後直接送出，不需加 @）："
+            ))
 
         elif data.startswith("action=dauding_publish"):
             import json as _json
@@ -3703,6 +3725,48 @@ def handle_message(event):
             safe_reply(event.reply_token, get_main_cat_menu())
             return
 
+        # 處理配對後補填 LINE ID
+        if res and res[0] and res[0].startswith('FILL_LINE_ID:'):
+            match_id = res[0].split(':', 1)[1]
+            new_lid = msg.strip().lstrip('@')
+            if not new_lid or not re.match(r'^[a-zA-Z0-9._-]{1,30}$', new_lid):
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入："
+                ))
+                return
+            conn = get_db()
+            try:
+                conn.execute(q('UPDATE matches SET line_id = ? WHERE id = ? AND user_id = ?'), (new_lid, match_id, uid))
+                conn.execute(q('UPDATE user_state SET step = NULL WHERE user_id = ?'), (uid,))
+                conn.commit()
+            finally:
+                conn.close()
+            pair_conn = get_db()
+            try:
+                pair = pair_conn.execute(q(
+                    "SELECT uid_a, match_id_a, uid_b, match_id_b FROM pairs WHERE (uid_a = ? AND match_id_a = ?) OR (uid_b = ? AND match_id_b = ?)"
+                ), (uid, match_id, uid, match_id)).fetchone()
+            finally:
+                pair_conn.close()
+            if pair:
+                other_uid = pair[2] if pair[0] == uid else pair[0]
+                safe_push(other_uid, FlexSendMessage(
+                    alt_text="✅ 對方已補填聯絡方式",
+                    contents={
+                        "type": "bubble",
+                        "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                            {"type": "text", "text": "✅ 對方已補填聯絡方式", "weight": "bold"},
+                            {"type": "text", "text": f"LINE ID：@{new_lid}", "size": "sm", "color": "#555555"}
+                        ]},
+                        "footer": {"type": "box", "layout": "vertical", "contents": [
+                            {"type": "button", "style": "primary", "color": "#00b900",
+                             "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{new_lid}"}}
+                        ]}
+                    }
+                ))
+            safe_reply(event.reply_token, TextSendMessage(text="✅ LINE ID 已更新，對方已收到通知！"))
+            return
+
         # 處理 LINE ID 輸入
         if res and res[0] == 'WAIT_LINE_ID':
             if msg == '重新輸入LINE ID':
@@ -3713,15 +3777,26 @@ def handle_message(event):
                     ])
                 ))
                 return
-            line_id = '' if msg == '跳過' else msg.strip().lstrip('@')
-            if line_id and not re.match(r'^[a-zA-Z0-9._-]{1,30}$', line_id):
-                safe_reply(event.reply_token, TextSendMessage(
-                    text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入，或按跳過：",
-                    quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
-                    ])
-                ))
-                return
+            if msg == '跳過':
+                line_id = ''
+            else:
+                line_id = msg.strip().lstrip('@')
+                if not line_id:
+                    safe_reply(event.reply_token, TextSendMessage(
+                        text="⚠️ 提醒：您未填寫 LINE ID，配對成功後對方將無法主動聯絡您。如需讓對方能加您 LINE，請輸入您的 LINE ID（格式：@帳號名 或直接輸入帳號）。如確定不填，請輸入『跳過』繼續發佈。",
+                        quick_reply=QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
+                        ])
+                    ))
+                    return
+                if not re.match(r'^[a-zA-Z0-9._-]{1,30}$', line_id):
+                    safe_reply(event.reply_token, TextSendMessage(
+                        text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入，或按跳過：",
+                        quick_reply=QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
+                        ])
+                    ))
+                    return
             conn = get_db()
             try:
                 conn.execute(q('UPDATE user_state SET temp_line_id = ?, step = ? WHERE user_id = ?'), (line_id, 'DONE', uid))
