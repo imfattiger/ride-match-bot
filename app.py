@@ -1974,6 +1974,26 @@ def handle_postback(event):
             safe_reply(event.reply_token, get_terms_flex())
             return
 
+        if data.startswith("action=edit_time"):
+            params = dict(parse_qsl(data))
+            match_id = params.get('id')
+            t = event.postback.params.get('datetime', '')
+            if not t or t < datetime.now().strftime("%Y-%m-%dT%H:%M"):
+                safe_reply(event.reply_token, TextSendMessage(text="⚠️ 出發時間不能是過去，請重新選擇。"))
+                return
+            conn = get_db()
+            try:
+                row = conn.execute(q("SELECT id FROM matches WHERE id = ? AND user_id = ?"), (match_id, uid)).fetchone()
+                if not row:
+                    safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到此行程。"))
+                    return
+                conn.execute(q("UPDATE matches SET time_info = ? WHERE id = ? AND user_id = ?"), (t, match_id, uid))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, TextSendMessage(text=f"✅ 出發時間已更新為 {t[5:16]}"))
+            return
+
         if data == "select_time":
             t = event.postback.params['datetime']
             if t < datetime.now().strftime("%Y-%m-%dT%H:%M"):
@@ -2504,6 +2524,11 @@ def handle_message(event):
                             {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                                  "action": {"type": "postback", "label": "✏️ 改ID", "data": f"action=edit_line_id&id={m_id}"}},
+                                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                                 "action": {"type": "datetimepicker", "label": "⏰ 改時間",
+                                            "data": f"action=edit_time&id={m_id}",
+                                            "mode": "datetime",
+                                            "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}},
                                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                                  "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
                             ]},
