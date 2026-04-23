@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m py_compile \"d:/賺錢企劃/linebot/app.py\" 2>&1 && echo SYNTAX_OK || echo WARNING_SYNTAX_ERROR_in_app.py_do_not_commit"
+          },
+          {
+            "type": "command",
+            "command": "python -c \"lines=len(open('d:/賺錢企劃/linebot/app.py').readlines()); print('app.py lines:',lines); exit(1) if lines < 3000 else exit(0)\" || echo WARNING_app.py_line_count_below_3000_possible_truncation"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(C:\\\\\\\\Users\\\\\\\\20160720\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Microsoft\\\\\\\\WindowsApps\\\\\\\\python.exe -c \"lines=len\\(open\\('d:/賺錢企劃/linebot/app.py'\\).readlines\\(\\)\\); print\\('app.py lines:', lines\\)\")",
+      "Bash(C:\\\\\\\\Users\\\\\\\\20160720\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Microsoft\\\\\\\\WindowsApps\\\\\\\\python.exe -m py_compile \"d:/賺錢企劃/linebot/app.py\")"
+    ]
+  }
+}

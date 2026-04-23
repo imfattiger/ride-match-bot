@@ -107,6 +107,23 @@ Uses **`line-bot-sdk==2.x`** (NOT v3). Imports are from `linebot` not `linebot.v
 - Same-city direction is detected by `sc == ec`, not weight equality (weights can collide, e.g. 新竹市/新竹縣)
 - `get_district_cluster()` fallback returns `city` (not `dist`) for cities without DISTRICT_GROUPS entries
 - Active trip limit is 3 per user, enforced in `do_publish()` before the duplicate-check
+## UX Changes
+
+When modifying input flows (QuickReply menus, Flex carousels, state machine steps):
+- **Preserve existing selection mechanisms unless explicitly told to replace them**
+- Add new inputs **alongside** existing ones — do NOT substitute
+- Before changing any input flow, state what you plan to keep vs. add vs. replace, and wait for confirmation
+- Example: "add vehicle model free text input AFTER the existing QuickReply selector" means keep the QuickReply AND add a new step after it
+
+Common mistake: replacing a QuickReply category selector with free text when the user wanted both preserved.
+
+## Environment
+
+- **Primary OS**: Windows 10. Be aware of Windows file lock issues — suggest closing apps or using Resource Monitor before file operations
+- **Remote access**: User accesses projects from iOS via Tailscale
+- **Render free tier**: 5 DB connection limit, 15-min sleep, cold-start ~10s
+- **Node.js path on Windows**: `export PATH="/c/Program Files/nodejs:$PATH"`
+
 ## Claude Code Working Rules
 
 ### Validation — never report done without verifying
@@ -126,3 +143,17 @@ Re-read the relevant section of `app.py` before making any edit. Context compres
 
 ### Verification mindset
 After implementing any feature, re-read the changed code and actively look for edge cases that would break it before reporting complete.
+
+### Pre-commit integrity check
+Before any `git commit` that touches `app.py`, run `git diff --stat HEAD` and report the line-count delta. If more than 20 lines were removed, pause and confirm the deletion was intentional before committing.
+
+### Diagnose infra before code
+When the bot is unresponsive in production, always check in this order BEFORE touching code:
+1. Is the Render deploy branch `main`? Is the latest commit on `main`?
+2. Is the webhook URL in LINE console pointing to the correct Render URL + `/callback`?
+3. Are all required env vars set on Render (`LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `DATABASE_URL`, `ADMIN_LINE_ID`)?
+4. Are Render deploy logs showing a successful build?
+Only after all four confirmed → look at app logic.
+
+### Windows file locks
+If any file operation (delete, rename, move) fails due to Windows file locks, do NOT retry with force flags. Tell the user which process likely holds the lock and ask them to close it via Task Manager or File Explorer.
