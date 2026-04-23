@@ -389,6 +389,36 @@ def flush_pending_pushes(uid):
 
 _last_clean_ts = 0
 
+def _push_rating_requests(conn, expired_match_ids):
+    """對即將刪除的行程，若有配對但尚未評分，推送評分邀請。"""
+    if not expired_match_ids:
+        return
+    for mid in expired_match_ids:
+        try:
+            pairs = conn.execute(q(
+                "SELECT uid_a, match_id_a, uid_b, match_id_b FROM pairs WHERE match_id_a = ? OR match_id_b = ?"
+            ), (mid, mid)).fetchall()
+            for ua, ma, ub, mb in pairs:
+                for rater, ratee, rater_mid in [(ua, ub, mb), (ub, ua, ma)]:
+                    already = conn.execute(q(
+                        "SELECT id FROM ratings WHERE rater_id = ? AND match_id = ?"
+                    ), (rater, rater_mid)).fetchone()
+                    if not already:
+                        from linebot.models import QuickReply, QuickReplyButton, PostbackAction
+                        qr = QuickReply(items=[
+                            QuickReplyButton(action=PostbackAction(
+                                label=f"{'⭐'*i}",
+                                data=f"action=rate&ratee={ratee}&match_id={rater_mid}&score={i}"
+                            )) for i in range(1, 6)
+                        ])
+                        safe_push(rater, TextSendMessage(
+                            text="🌟 你的共乘行程已結束，幫配對對象評個分吧！",
+                            quick_reply=qr
+                        ))
+        except Exception as e:
+            logging.error(f"push_rating_requests mid={mid}: {e}")
+
+
 def clean_expired_matches():
     global _last_clean_ts
     if time.time() - _last_clean_ts < 300:  # 最多每 5 分鐘跑一次
@@ -398,7 +428,11 @@ def clean_expired_matches():
         conn = get_db()
         try:
             now = datetime.now().strftime("%Y-%m-%dT%H:%M")
-            # 出發時間已過 → 直接刪除（不論 status）
+            # 出發時間已過 → 先推評分再刪除
+            expiring = conn.execute(q(
+                "SELECT id FROM matches WHERE time_info < ?"
+            ), (now,)).fetchall()
+            _push_rating_requests(conn, [r[0] for r in expiring])
             conn.execute(q("DELETE FROM matches WHERE time_info < ?"), (now,))
             # 刊登到期但尚未出發 → 標記 expired（保留等用戶重新上架）
             conn.execute(q("UPDATE matches SET status = 'expired' WHERE status = 'active' AND expires_at < ? AND time_info >= ?"), (now, now))
@@ -1564,7 +1598,7 @@ def admin_panel():
     try:
         conn = get_db()
         trips = conn.execute(q(
-            "SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, status, expires_at, created_at, COALESCE(is_recurring,0), recur_weekdays FROM matches ORDER BY created_at DESC LIMIT 200"
+            "SELECT id, user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, fee, status, expires_at, created_at, COALESCE(is_recurring,0), recur_weekdays, COALESCE(way_point,''), COALESCE(prefs,'') FROM matches ORDER BY created_at DESC LIMIT 200"
         )).fetchall()
         pairs = conn.execute(q(
             "SELECT uid_a, match_id_a, uid_b, match_id_b, created_at FROM pairs ORDER BY created_at DESC LIMIT 100"
@@ -1581,11 +1615,15 @@ def admin_panel():
 
         trip_rows = ""
         for t in trips:
-            tid,uid,utype,tinfo,sc,sd,ec,ed,fee,sts,exp,cat,is_recur,recur_wd = t
+            tid,uid,utype,tinfo,sc,sd,ec,ed,fee,sts,exp,created_at,is_recur,recur_wd,waypoint,prefs = t
             sc_badge = "🚗" if utype=='driver' else "🙋"
             recur_tag = f" 🔁{recur_wd}" if is_recur and recur_wd else ""
             color = status_color.get(sts,'#888')
             token = os.getenv('ADMIN_LINE_ID','')
+            note_parts = []
+            if waypoint: note_parts.append(f"途經:{waypoint}")
+            if prefs: note_parts.append(prefs)
+            note = "　".join(note_parts) if note_parts else '-'
             trip_rows += f"""<tr>
 <td>{tid}</td>
 <td class="uid" title="{uid}">{uid or ''}</td>
@@ -1595,13 +1633,15 @@ def admin_panel():
 <td>{fee or '-'}</td>
 <td style="color:{color};font-weight:bold">{sts}</td>
 <td style="font-size:11px">{str(exp)[5:16] if exp else '-'}</td>
+<td style="font-size:11px">{str(created_at)[5:16] if created_at else '-'}</td>
+<td style="font-size:11px;color:#555">{note}</td>
 <td><a href="/admin/delete?id={tid}&token={token}" onclick="return confirm('確定刪除行程 {tid}？')" style="color:#cc0000;font-size:12px">刪除</a></td>
 </tr>"""
 
         pair_rows = ""
         for p in pairs:
             ua,ma,ub,mb,cat = p
-            pair_rows += f"<tr><td class='uid' title='{ua}'>{ua or ''}</td><td>{ma}</td><td class='uid' title='{ub}'>{ub or ''}</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+            pair_rows += f"<tr><td class='uid' title='{ua}'>{ua or ''}</td><td>{ma}</td><td class='uid' title='{ub}'>{ub or ''}</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[5:16] if cat else '-'}</td></tr>"
 
         rating_rows = ""
         for r in ratings:
@@ -1659,7 +1699,7 @@ def admin_panel():
 
 <h2>行程列表（最近 200 筆）</h2>
 <table>
-<tr><th>ID</th><th>用戶</th><th>身份</th><th>時間</th><th>路線</th><th>費用</th><th>狀態</th><th>下架</th><th>操作</th></tr>
+<tr><th>ID</th><th>用戶</th><th>身份</th><th>時間</th><th>路線</th><th>費用</th><th>狀態</th><th>下架</th><th>發布</th><th>備註</th><th>操作</th></tr>
 {trip_rows}
 </table>
 
