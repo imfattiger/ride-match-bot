@@ -3808,8 +3808,13 @@ def handle_message(event):
         else:
             # 轉發給 admin（可能是用戶主動回覆管理員訊息）
             if ADMIN_LINE_ID and uid != ADMIN_LINE_ID:
+                try:
+                    profile = line_bot_api.get_profile(uid)
+                    display_name = profile.display_name
+                except Exception:
+                    display_name = "未知用戶"
                 safe_push(ADMIN_LINE_ID, TextSendMessage(
-                    text=f"💬 用戶訊息轉發\nUID：{uid}\n\n{msg}\n\n回覆請用：/contact {uid} <你的訊息>"
+                    text=f"💬 用戶訊息轉發\n👤 {display_name}（{uid}）\n\n{msg}\n\n回覆請用：/contact {uid} <你的訊息>"
                 ))
             items = [
                 QuickReplyButton(action=MessageAction(label="🚗 我要載客/貨", text="我要載客/貨")),
