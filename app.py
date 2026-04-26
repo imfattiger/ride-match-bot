@@ -1626,7 +1626,7 @@ def admin_panel():
             note = "　".join(note_parts) if note_parts else '-'
             trip_rows += f"""<tr>
 <td>{tid}</td>
-<td class="uid" title="{uid}">{uid or ''}</td>
+<td class="uid" title="{uid}" style="font-size:11px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{(uid[:8]+'…') if uid else ''}</td>
 <td>{sc_badge}</td>
 <td>{str(tinfo)[5:16]}{recur_tag}</td>
 <td>{sc}{sd}→{ec}{ed}</td>
@@ -1641,13 +1641,13 @@ def admin_panel():
         pair_rows = ""
         for p in pairs:
             ua,ma,ub,mb,cat = p
-            pair_rows += f"<tr><td class='uid' title='{ua}'>{ua or ''}</td><td>{ma}</td><td class='uid' title='{ub}'>{ub or ''}</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[5:16] if cat else '-'}</td></tr>"
+            pair_rows += f"<tr><td class='uid' title='{ua}' style='font-size:11px'>{(ua[:8]+'…') if ua else ''}</td><td>{ma}</td><td class='uid' title='{ub}' style='font-size:11px'>{(ub[:8]+'…') if ub else ''}</td><td>{mb}</td><td style='font-size:11px'>{str(cat)[5:16] if cat else '-'}</td></tr>"
 
         rating_rows = ""
         for r in ratings:
             rater,ratee,score,mid,cat = r
             stars = "⭐"*int(score) if score else "-"
-            rating_rows += f"<tr><td class='uid' title='{rater}'>{rater or ''}</td><td class='uid' title='{ratee}'>{ratee or ''}</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
+            rating_rows += f"<tr><td class='uid' title='{rater}' style='font-size:11px'>{(rater[:8]+'…') if rater else ''}</td><td class='uid' title='{ratee}' style='font-size:11px'>{(ratee[:8]+'…') if ratee else ''}</td><td>{stars}({score})</td><td>{mid}</td><td style='font-size:11px'>{str(cat)[:16]}</td></tr>"
 
         token = os.getenv('ADMIN_LINE_ID','')
         report_rows = ""
@@ -1657,8 +1657,8 @@ def admin_panel():
             report_rows += (
                 f"<tr>"
                 f"<td>{rp_id}</td>"
-                f"<td class='uid' title='{rp_reporter}'>{rp_reporter or ''}</td>"
-                f"<td class='uid' title='{rp_target}'>{rp_target or ''}</td>"
+                f"<td class='uid' title='{rp_reporter}' style='font-size:11px'>{(rp_reporter[:8]+'…') if rp_reporter else ''}</td>"
+                f"<td class='uid' title='{rp_target}' style='font-size:11px'>{(rp_target[:8]+'…') if rp_target else ''}</td>"
                 f"<td>{rp_trip or '-'}</td>"
                 f"<td>{status_badge}</td>"
                 f"<td style='font-size:11px'>{str(rp_cat)[:16]}</td>"
@@ -2523,15 +2523,15 @@ def handle_message(event):
                              "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
                             {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                                 "action": {"type": "postback", "label": "✏️ 改ID", "data": f"action=edit_line_id&id={m_id}"}},
+                                 "action": {"type": "postback", "label": "✏️ 改LINE ID", "data": f"action=edit_line_id&id={m_id}"}},
                                 {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                                 "action": {"type": "datetimepicker", "label": "⏰ 改時間",
+                                 "action": {"type": "datetimepicker", "label": "⏰ 改出發時間",
                                             "data": f"action=edit_time&id={m_id}",
                                             "mode": "datetime",
-                                            "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}},
-                                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                                 "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
+                                            "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}}
                             ]},
+                            {"type": "button", "style": "secondary", "height": "sm", "color": "#ff4b4b",
+                             "action": {"type": "postback", "label": "🗑️ 刪除行程", "data": f"action=delete&id={m_id}"}},
                             {"type": "button", "style": "link", "height": "sm", "color": "#888888",
                              "action": {"type": "message", "label": notify_label, "text": notify_text}},
                         ] + extra_btns
