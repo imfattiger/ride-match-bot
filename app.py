@@ -3823,7 +3823,7 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="幫助"))
             ]
             safe_reply(event.reply_token, TextSendMessage(
-                text="🤔 不太確定您的意思，請選擇以下功能：",
+                text="✉️ 您的訊息已轉交給小編，我們會盡快回覆！\n\n如需聯絡配對對象，請使用對方提供的 LINE ID 直接加好友，不是傳訊息給這裡喔 😊",
                 quick_reply=QuickReply(items=items)
             ))
 
