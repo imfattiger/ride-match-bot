@@ -3538,7 +3538,7 @@ def handle_message(event):
             if prev and prev[0]:
                 saved_id = prev[0]
                 safe_reply(event.reply_token, TextSendMessage(
-                    text=f"📱 聯絡方式設定\n\n上次使用的 LINE ID：@{saved_id}\n\n直接沿用還是重新輸入？\n⌨️ 點左下角鍵盤圖示可直接輸入新 ID",
+                    text=f"📱 聯絡方式設定\n\n上次使用的 LINE ID：@{saved_id}\n\n直接沿用還是重新輸入？\n⌨️ 點左下角鍵盤圖示可直接輸入新 ID\n\n⚠️ 請填寫真實 LINE ID，填假 ID 經檢舉將永久停權。",
                     quick_reply=QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label=f"沿用 @{saved_id[:10]}", text=saved_id)),
                         QuickReplyButton(action=MessageAction(label="重新輸入", text="重新輸入LINE ID"))
@@ -3546,7 +3546,7 @@ def handle_message(event):
                 ))
             else:
                 safe_reply(event.reply_token, TextSendMessage(
-                    text="📱 最後一步！輸入 LINE ID 讓配對對象能聯絡你：\n\n查看方式：LINE → 設定 → 個人檔案 → LINE ID\n⌨️ 點左下角鍵盤圖示輸入"
+                    text="📱 最後一步！輸入 LINE ID 讓配對對象能聯絡你：\n\n查看方式：LINE → 設定 → 個人檔案 → LINE ID\n⌨️ 點左下角鍵盤圖示輸入\n\n⚠️ 請填寫真實 LINE ID，填假 ID 經檢舉將永久停權。"
                 ))
             return
 
@@ -3810,7 +3810,7 @@ def handle_message(event):
                 except Exception:
                     display_name = "未知用戶"
                 safe_push(ADMIN_LINE_ID, TextSendMessage(
-                    text=f"💬 用戶訊息轉發\n👤 {display_name}（{uid}）\n\n{msg}\n\n回覆請用：/contact {uid} <你的訊息>"
+                    text=f"💬 用戶訊息轉發\n👤 {display_name}（{uid[:8]}…）\n\n{msg}\n\n回覆請用：/contact {uid} <你的訊息>"
                 ))
             items = [
                 QuickReplyButton(action=MessageAction(label="🚗 我要載客/貨", text="我要載客/貨")),
