@@ -2521,15 +2521,13 @@ def handle_message(event):
                         ] if is_expired else [
                             {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                              "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
-                            {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                                 "action": {"type": "postback", "label": "✏️ 改LINE ID", "data": f"action=edit_line_id&id={m_id}"}},
-                                {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                                 "action": {"type": "datetimepicker", "label": "⏰ 改出發時間",
-                                            "data": f"action=edit_time&id={m_id}",
-                                            "mode": "datetime",
-                                            "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}}
-                            ]},
+                            {"type": "button", "style": "secondary", "height": "sm",
+                             "action": {"type": "postback", "label": "✏️ 改LINE ID", "data": f"action=edit_line_id&id={m_id}"}},
+                            {"type": "button", "style": "secondary", "height": "sm",
+                             "action": {"type": "datetimepicker", "label": "⏰ 改出發時間",
+                                        "data": f"action=edit_time&id={m_id}",
+                                        "mode": "datetime",
+                                        "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}},
                             {"type": "button", "style": "secondary", "height": "sm", "color": "#ff4b4b",
                              "action": {"type": "postback", "label": "🗑️ 刪除行程", "data": f"action=delete&id={m_id}"}},
                             {"type": "button", "style": "link", "height": "sm", "color": "#888888",
@@ -3540,16 +3538,12 @@ def handle_message(event):
                     text=f"📱 聯絡方式設定\n\n上次使用的 LINE ID：@{saved_id}\n\n直接沿用還是重新輸入？\n⌨️ 點左下角鍵盤圖示可直接輸入新 ID",
                     quick_reply=QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label=f"沿用 @{saved_id[:10]}", text=saved_id)),
-                        QuickReplyButton(action=MessageAction(label="重新輸入", text="重新輸入LINE ID")),
-                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
+                        QuickReplyButton(action=MessageAction(label="重新輸入", text="重新輸入LINE ID"))
                     ])
                 ))
             else:
                 safe_reply(event.reply_token, TextSendMessage(
-                    text="📱 最後一步！輸入 LINE ID 讓配對對象能聯絡你：\n\n查看方式：LINE → 設定 → 個人檔案 → LINE ID\n（不想提供請按跳過）",
-                    quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
-                    ])
+                    text="📱 最後一步！輸入 LINE ID 讓配對對象能聯絡你：\n\n查看方式：LINE → 設定 → 個人檔案 → LINE ID\n⌨️ 點左下角鍵盤圖示輸入"
                 ))
             return
 
@@ -3772,19 +3766,18 @@ def handle_message(event):
         if res and res[0] == 'WAIT_LINE_ID':
             if msg == '重新輸入LINE ID':
                 safe_reply(event.reply_token, TextSendMessage(
-                    text="請輸入你的 LINE ID（不含 @）：\n⌨️ 點左下角鍵盤圖示輸入文字",
-                    quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
-                    ])
+                    text="請輸入你的 LINE ID（不含 @）：\n⌨️ 點左下角鍵盤圖示輸入文字"
                 ))
                 return
-            line_id = '' if msg == '跳過' else msg.strip().lstrip('@')
-            if line_id and not re.match(r'^[a-zA-Z0-9._-]{1,30}$', line_id):
+            if msg == '跳過':
                 safe_reply(event.reply_token, TextSendMessage(
-                    text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入，或按跳過：",
-                    quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="跳過", text="跳過"))
-                    ])
+                    text="⚠️ LINE ID 為必填，配對對象需要靠它聯絡你。\n\n查看方式：LINE → 設定 → 個人檔案 → LINE ID\n⌨️ 請輸入你的 LINE ID："
+                ))
+                return
+            line_id = msg.strip().lstrip('@')
+            if not re.match(r'^[a-zA-Z0-9._-]{1,30}$', line_id):
+                safe_reply(event.reply_token, TextSendMessage(
+                    text="⚠️ LINE ID 格式不正確，只允許英文、數字、底線、點、連字號（最多30字元）。\n\n請重新輸入："
                 ))
                 return
             conn = get_db()
