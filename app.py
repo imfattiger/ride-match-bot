@@ -1144,12 +1144,15 @@ def get_rules_flex():
     return FlexSendMessage(alt_text="媒合規則說明", contents=bubble)
 
 # --- 被動媒合推播 Flex 卡片 ---
-def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no=""):
+def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no="", publisher_uid=""):
     prefs_text = prefs.strip().rstrip(",") if prefs else "（未設定）"
     contact_contents = [{"type": "text", "text": "有人發布了與您同向的行程！", "size": "xs", "color": "#888888", "align": "center"}]
     if line_id:
         contact_contents.append({"type": "button", "style": "primary", "height": "sm", "color": "#00b900", "margin": "sm",
             "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{line_id}"}})
+    elif publisher_uid:
+        contact_contents.append({"type": "button", "style": "primary", "height": "sm", "color": "#E07B00", "margin": "sm",
+            "action": {"type": "postback", "label": "📨 通知對方留聯絡方式", "data": f"action=contact_req&to={publisher_uid}&route={sc}{sd}→{ec}{ed}"}})
 
     # 解析 way_point 取上下車地點（格式：接受中途|上車:XXX|下車:YYY）
     body_contents = [
@@ -1321,7 +1324,7 @@ def do_publish(uid, reply_token):
             finally:
                 limit_conn.close()
             if is_notify_enabled(m[0]):
-                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt, pn))
+                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt, pn, publisher_uid=uid))
 
         rating_conn.close()
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
