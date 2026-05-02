@@ -502,6 +502,31 @@ def is_notify_enabled(user_id):
         return True  # 查不到時預設送出
 
 
+PUSH_QUOTA = 3000  # LINE 中用量方案每月額度
+_push_quota_warned = set()  # 已警告過的 threshold，月份重置
+
+def _check_push_quota():
+    """推播後檢查月用量是否超過 80%/95%，達標時 admin_alert。"""
+    try:
+        month_key = datetime.now().strftime("%Y-%m")
+        global _push_quota_warned
+        # 換月就重置
+        if not any(k.startswith(month_key) for k in _push_quota_warned):
+            _push_quota_warned = set()
+        _lc = get_db()
+        try:
+            cnt = _lc.execute(q("SELECT COUNT(*) FROM push_log WHERE month_key = ?"), (month_key,)).fetchone()[0]
+        finally:
+            _lc.close()
+        for pct, label in [(0.95, "95%"), (0.80, "80%")]:
+            key = f"{month_key}_{label}"
+            if cnt >= PUSH_QUOTA * pct and key not in _push_quota_warned:
+                _push_quota_warned.add(key)
+                admin_alert("push_quota", f"⚠️ 本月推播已用 {cnt}/{PUSH_QUOTA} 則（{label}），請注意額度！")
+                break
+    except Exception as e:
+        logging.warning(f"_check_push_quota failed: {e}")
+
 def safe_push(user_id, messages):
     try:
         line_bot_api.push_message(user_id, messages)
@@ -514,6 +539,7 @@ def safe_push(user_id, messages):
                 _lc.commit()
             finally:
                 _lc.close()
+            threading.Thread(target=_check_push_quota, daemon=True).start()
         except:
             pass
     except Exception as e:
@@ -2950,7 +2976,7 @@ def handle_message(event):
                 timeout=5
             )
             used = resp.json().get("totalUsage", 0)
-            quota_text = f"已用 {used} / 200 則（剩 {max(0, 200 - used)}）"
+            quota_text = f"已用 {used} / {PUSH_QUOTA} 則（剩 {max(0, PUSH_QUOTA - used)}）"
         except Exception:
             quota_text = "無法取得"
         safe_reply(event.reply_token, TextSendMessage(
