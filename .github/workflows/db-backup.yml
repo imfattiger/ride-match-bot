@@ -1,0 +1,43 @@
+name: Daily DB Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'  # 每天 UTC 18:00 = 台灣時間凌晨 02:00
+  workflow_dispatch:       # 手動觸發
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install postgresql-client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          mkdir -p backups
+          DATE=$(date +%Y-%m-%d)
+          pg_dump "$DATABASE_URL" --no-password --format=plain --no-owner | gzip > "backups/ridematch_${DATE}.sql.gz"
+          echo "Backup created: backups/ridematch_${DATE}.sql.gz"
+          ls -lh backups/
+
+      - name: Keep only last 30 backups
+        run: |
+          cd backups
+          ls -t *.sql.gz | tail -n +31 | xargs -r rm --
+          echo "Current backups:"
+          ls -lh
+
+      - name: Commit and push backup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backups/
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "backup: $(date +%Y-%m-%d) DB snapshot"
+          git push
