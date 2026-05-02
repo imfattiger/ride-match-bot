@@ -354,7 +354,8 @@ def is_blocked(uid):
         finally:
             conn.close()
         return bool(row)
-    except:
+    except Exception as e:
+        admin_alert("is_blocked", f"封鎖檢查失敗 uid={uid[:10]}: {e}")
         return False
 
 _flush_last = {}  # uid -> last flush timestamp，避免每次訊息都觸發 DB query
@@ -382,10 +383,10 @@ def flush_pending_pushes(uid):
                     _dc.commit()
                 finally:
                     _dc.close()
-            except:
-                pass  # 仍然失敗就等下次
-    except:
-        pass
+            except Exception as e:
+                logging.warning(f"flush_pending_pushes inner failed uid={uid[:10]}: {e}")
+    except Exception as e:
+        logging.error(f"flush_pending_pushes failed uid={uid[:10]}: {e}")
 
 _last_clean_ts = 0
 
@@ -460,6 +461,25 @@ def _store_log(tag, msg):
     if len(_log_store) > 30:
         _log_store.pop(0)
 
+_admin_alert_last = {}  # tag -> timestamp，避免相同錯誤連環轟炸 admin
+
+def admin_alert(tag, message):
+    """記錄錯誤，同時推播給 admin。同 tag 5 分鐘內最多送一次，避免 spam。"""
+    logging.error(f"[{tag}] {message}")
+    _store_log(f"err_{tag}", str(message)[:200])
+    if not ADMIN_LINE_ID:
+        return
+    now = time.time()
+    if now - _admin_alert_last.get(tag, 0) < 300:
+        return
+    _admin_alert_last[tag] = now
+    try:
+        line_bot_api.push_message(ADMIN_LINE_ID, TextSendMessage(
+            text=f"⚠️ Bot 錯誤 [{tag}]\n\n{str(message)[:300]}"
+        ))
+    except Exception:
+        pass  # 連 admin 都推不到就放棄，避免無限遞迴
+
 def safe_reply(reply_token, messages):
     try:
         line_bot_api.reply_message(reply_token, messages)
@@ -477,7 +497,8 @@ def is_notify_enabled(user_id):
         finally:
             _nc.close()
         return (row[0] if row and row[0] is not None else 1) == 1
-    except:
+    except Exception as e:
+        logging.error(f"is_notify_enabled failed uid={user_id[:10]}: {e}")
         return True  # 查不到時預設送出
 
 
@@ -1367,7 +1388,8 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
             buffer = 1.5 if is_keelung_corridor else 1
         s_range = (base_t - timedelta(hours=buffer)).strftime("%Y-%m-%dT%H:%M")
         e_range = (base_t + timedelta(hours=buffer)).strftime("%Y-%m-%dT%H:%M")
-    except:
+    except Exception as e:
+        logging.warning(f"find_matches time parse fallback t_info={t_info}: {e}")
         s_range, e_range = t_info, t_info
         buffer = 1
 
@@ -1391,7 +1413,8 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     final_matches = []
     try:
         user_p = int(str(p_count).strip().split()[0])
-    except:
+    except Exception as e:
+        logging.warning(f"find_matches user_p parse fallback p_count={p_count}: {e}")
         user_p = 1  # 無法解析時預設 1，避免 crash 導致全部配不到
 
     base_mins = base_t.hour * 60 + base_t.minute
@@ -1408,7 +1431,8 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
                 m_mins = m_t.hour * 60 + m_t.minute
                 if abs(m_mins - base_mins) > buffer * 60:
                     continue  # 時間不在緩衝範圍
-            except:
+            except Exception as e:
+                logging.warning(f"find_matches recur time parse skipped m_time={m_time}: {e}")
                 continue
             m_weekdays = set(int(d) for d in (m_recur_wd or '').split(',') if d.strip().isdigit())
             if not m_weekdays:
@@ -1444,7 +1468,8 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
 
         try:
             match_p = int(str(m_pc).strip().split()[0])
-        except:
+        except Exception as e:
+            logging.warning(f"find_matches match_p parse fallback m_pc={m_pc}: {e}")
             match_p = 1
         # driver.user_p = 能載幾人；seeker.user_p = 需要幾個座位
         # 配對條件：driver 能載人數 >= seeker 需要座位數
@@ -1588,10 +1613,11 @@ def health():
     return {"token": token_ok, "secret": secret_ok, "db": db_ok}
 
 def _check_admin_token():
-    """驗證請求帶有正確的 admin token（query string: ?token=xxx）"""
+    """驗證請求帶有正確的 admin token（query string: ?token=xxx）。
+    沒設 ADMIN_SECRET 時直接拒絕，避免生產環境裸奔。"""
     expected = os.getenv('ADMIN_SECRET', '')
     if not expected:
-        return True  # 未設定時不驗證（開發環境）
+        return False
     return request.args.get('token') == expected
 
 @app.route("/admin", methods=['GET'])
@@ -1949,7 +1975,8 @@ def handle_postback(event):
             _pb_blocked = _pc.execute(q("SELECT user_id FROM blocked_users WHERE user_id = ?"), (uid,)).fetchone()
         finally:
             _pc.close()
-    except:
+    except Exception as e:
+        admin_alert("postback_state_load", f"uid={uid[:10]}: {e}")
         _pb_state, _pb_blocked = None, None
 
     if _pb_blocked:
@@ -2353,7 +2380,8 @@ def handle_message(event):
             ), (uid,)).fetchone()
         finally:
             _gc.close()
-    except:
+    except Exception as e:
+        admin_alert("message_state_load", f"uid={uid[:10]}: {e}")
         _state, _blocked = None, None
 
     if _blocked:
