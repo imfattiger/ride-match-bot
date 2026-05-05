@@ -3629,7 +3629,7 @@ def handle_message(event):
                 conn2.close()
             if ADMIN_LINE_ID:
                 safe_push(ADMIN_LINE_ID, TextSendMessage(
-                    text=f"📬 用戶回饋（uid: {uid[:12]}...）\n\n{feedback_text}"
+                    text=f"📬 用戶回饋\n👤 {uid}\n\n{feedback_text}\n\n回覆請用：/contact {uid} <你的訊息>"
                 ))
             safe_reply(event.reply_token, TextSendMessage(text="✅ 已收到！感謝你的回饋，我們會持續改善 🙏"))
             return
