@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sun car 順咖媒合｜台灣共乘媒合 LINE Bot，免費找共乘</title>
+<meta name="description" content="台灣唯一 P2P 共乘 LINE Bot。在 LINE 裡發布行程，自動配對同向乘客或司機，已有 1,000+ 用戶、74 次成功配對。完全免費，不收手續費。">
+<meta name="keywords" content="共乘,找共乘,台灣共乘,共乘APP,共乘媒合,LINE共乘,P2P共乘,共乘台北,順路帶人,帶貨順路">
+<meta property="og:title" content="sun car 順咖媒合｜台灣共乘媒合 LINE Bot">
+<meta property="og:description" content="在 LINE 裡發布行程，系統自動配對同向乘客或司機。1,000+ 用戶，完全免費。">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Noto Sans TC',sans-serif;color:#222;line-height:1.75;background:#fff}
+
+  /* hero */
+  .hero{background:linear-gradient(135deg,#0a5c36 0%,#1a7a4a 60%,#2ecc71 100%);color:#fff;text-align:center;padding:64px 20px 56px}
+  .hero h1{font-size:2rem;font-weight:700;margin-bottom:10px;letter-spacing:.02em}
+  .hero .sub{font-size:1.1rem;opacity:.9;margin-bottom:32px}
+  .hero .stats{display:flex;justify-content:center;gap:32px;margin-bottom:36px;flex-wrap:wrap}
+  .stat{text-align:center}
+  .stat .num{font-size:2rem;font-weight:700;display:block}
+  .stat .label{font-size:.8rem;opacity:.8}
+  .btn-main{display:inline-block;background:#06c755;color:#fff;padding:16px 40px;border-radius:50px;text-decoration:none;font-size:1.1rem;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:transform .15s}
+  .btn-main:hover{transform:scale(1.04)}
+  .line-id{margin-top:12px;font-size:.85rem;opacity:.75}
+
+  /* sections */
+  section{padding:52px 20px;max-width:720px;margin:0 auto}
+  h2{font-size:1.3rem;font-weight:700;color:#0a5c36;margin-bottom:20px;padding-bottom:8px;border-bottom:2px solid #d4edda}
+
+  /* who */
+  .who-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .who-card{background:#f7fdf9;border:1px solid #c3e6cb;border-radius:12px;padding:20px}
+  .who-card .icon{font-size:1.8rem;margin-bottom:8px}
+  .who-card h3{font-size:1rem;font-weight:700;margin-bottom:6px;color:#0a5c36}
+  .who-card p{font-size:.9rem;color:#444}
+
+  /* steps */
+  .steps{counter-reset:step}
+  .step{display:flex;gap:16px;margin-bottom:24px;align-items:flex-start}
+  .step-num{background:#0a5c36;color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;flex-shrink:0;margin-top:2px}
+  .step-text h3{font-size:1rem;font-weight:700;margin-bottom:2px}
+  .step-text p{font-size:.9rem;color:#555}
+
+  /* features */
+  .features{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .feature{background:#f7fdf9;border-radius:10px;padding:14px 16px;font-size:.9rem;border-left:3px solid #06c755}
+  .feature strong{display:block;margin-bottom:2px;color:#0a5c36}
+
+  /* faq */
+  .faq-item{margin-bottom:20px}
+  .faq-item dt{font-weight:700;color:#0a5c36;margin-bottom:4px}
+  .faq-item dd{font-size:.92rem;color:#444;margin-left:0}
+
+  /* cta bottom */
+  .cta-bottom{background:#f0faf5;border-top:1px solid #c3e6cb;text-align:center;padding:52px 20px}
+  .cta-bottom h2{border:none;margin-bottom:8px}
+  .cta-bottom p{color:#555;margin-bottom:24px}
+
+  /* footer */
+  footer{text-align:center;padding:24px 20px;font-size:.8rem;color:#999;border-top:1px solid #eee}
+
+  @media(max-width:480px){
+    .hero h1{font-size:1.5rem}
+    .who-grid,.features{grid-template-columns:1fr}
+    .hero .stats{gap:20px}
+    .stat .num{font-size:1.6rem}
+  }
+</style>
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"FAQPage",
+  "mainEntity":[
+    {"@type":"Question","name":"sun car 是什麼？","acceptedAnswer":{"@type":"Answer","text":"sun car 順咖媒合是台灣唯一的 P2P 共乘 LINE Bot，讓司機和乘客在 LINE 內完成發布行程、自動配對、互相聯絡，完全不用下載 App。"}},
+    {"@type":"Question","name":"共乘費用怎麼算？","acceptedAnswer":{"@type":"Answer","text":"平台媒合服務完全免費。司機與乘客之間的費用（油資、過路費分攤）由雙方自行協議，平台不經手任何金流。"}},
+    {"@type":"Question","name":"如何開始使用？","acceptedAnswer":{"@type":"Answer","text":"在 LINE 搜尋『sun car 順咖媒合』或搜尋帳號 @321nmofi，加入好友後同意使用條款即可發布行程。"}},
+    {"@type":"Question","name":"配對後怎麼聯絡？","acceptedAnswer":{"@type":"Answer","text":"配對成功後，系統會分別通知雙方，並提供對方的 LINE ID，由雙方自行加好友聯絡細節。"}}
+  ]
+}
+</script>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>🚗 sun car 順咖媒合</h1>
+  <p class="sub">台灣 P2P 共乘媒合 LINE Bot｜自動配對，省錢又環保</p>
+  <div class="stats">
+    <div class="stat"><span class="num">1,000+</span><span class="label">加入用戶</span></div>
+    <div class="stat"><span class="num">74</span><span class="label">成功配對</span></div>
+    <div class="stat"><span class="num">免費</span><span class="label">零手續費</span></div>
+  </div>
+  <a class="btn-main" href="https://line.me/R/ti/p/@321nmofi">➕ 加入 LINE Bot 開始找共乘</a>
+  <p class="line-id">LINE 搜尋帳號：@321nmofi</p>
+</div>
+
+<!-- WHO -->
+<section>
+  <h2>適合誰使用</h2>
+  <div class="who-grid">
+    <div class="who-card">
+      <div class="icon">🚗</div>
+      <h3>司機／貨主</h3>
+      <p>長途有空位，順路帶人或帶貨，分攤油資過路費。</p>
+    </div>
+    <div class="who-card">
+      <div class="icon">🙋</div>
+      <h3>乘客／寄物方</h3>
+      <p>需要搭車或寄送物品，找順路的人，比計程車便宜。</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW -->
+<section style="background:#fafafa;max-width:100%;padding:52px 0">
+<div style="max-width:720px;margin:0 auto;padding:0 20px">
+  <h2>怎麼用？四步搞定</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text"><h3>加入 LINE Bot</h3><p>搜尋 @321nmofi，30 秒完成，不用下載 App。</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text"><h3>同意條款，選擇身份</h3><p>司機或乘客，發布你的行程時間與起訖點。</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text"><h3>系統自動配對</h3><p>智慧比對方向、時間、地點，找到同向行程。</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text"><h3>收到通知，直接聯絡</h3><p>配對成功 LINE 主動通知，取得對方聯絡方式。</p></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- FEATURES -->
+<section>
+  <h2>為什麼比社群發文好用</h2>
+  <div class="features">
+    <div class="feature"><strong>自動方向配對</strong>北→南只配北→南，不會亂配</div>
+    <div class="feature"><strong>時間彈性搜尋</strong>前後 1～4 小時範圍，容錯更高</div>
+    <div class="feature"><strong>支援中途上下車</strong>可設定中繼點，不只點對點</div>
+    <div class="feature"><strong>順路帶貨／寄物</strong>不只搭人，貨物也能媒合</div>
+    <div class="feature"><strong>互評系統</strong>配對完成後互評，安全有保障</div>
+    <div class="feature"><strong>全程在 LINE 完成</strong>不用跳去外部網站或 App</div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section style="background:#fafafa;max-width:100%;padding:52px 0">
+<div style="max-width:720px;margin:0 auto;padding:0 20px">
+  <h2>常見問題</h2>
+  <dl>
+    <div class="faq-item">
+      <dt>要收費嗎？</dt>
+      <dd>平台媒合完全免費，不收手續費。司機與乘客之間的油資分攤由雙方自行協議。</dd>
+    </div>
+    <div class="faq-item">
+      <dt>共乘合法嗎？</dt>
+      <dd>合法。依交通部函釋，分攤油資、過路費的共乘行為不屬於汽車運輸業。平台媒合不經手車資。</dd>
+    </div>
+    <div class="faq-item">
+      <dt>配對後怎麼聯絡？</dt>
+      <dd>配對成功後系統推播通知，並提供對方 LINE ID，由雙方自行聯絡細節。</dd>
+    </div>
+    <div class="faq-item">
+      <dt>只有台北可以用嗎？</dt>
+      <dd>全台皆可，目前北部用戶較多，正在擴展中。南部歡迎加入！</dd>
+    </div>
+  </dl>
+</div>
+</section>
+
+<!-- CTA BOTTOM -->
+<div class="cta-bottom">
+  <h2 style="color:#0a5c36;font-size:1.3rem">現在就開始找共乘</h2>
+  <p>加入超過 1,000 位用戶，自動配對同向行程</p>
+  <a class="btn-main" href="https://line.me/R/ti/p/@321nmofi">➕ 加入 LINE Bot</a>
+  <p style="margin-top:12px;font-size:.85rem;color:#888">LINE 搜尋：<strong>sun car 順咖媒合</strong> 或 <strong>@321nmofi</strong></p>
+</div>
+
+<footer>
+  <p>sun car 順咖媒合 &copy; 2026 ｜ 資訊媒合服務，非汽車運輸業者</p>
+  <p style="margin-top:6px"><a href="mailto:jun913758@gmail.com" style="color:#888">jun913758@gmail.com</a></p>
+</footer>
+
+</body>
+</html>
