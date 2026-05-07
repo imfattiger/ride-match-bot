@@ -262,6 +262,8 @@ SCHEMA_MIGRATIONS = [
     (33,
      "CREATE TABLE IF NOT EXISTS reports (id SERIAL PRIMARY KEY, reporter_uid TEXT, target_uid TEXT, trip_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
      "CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_uid TEXT, target_uid TEXT, trip_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+    (34, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS edit_match_id TEXT",
+         "ALTER TABLE user_state ADD COLUMN edit_match_id TEXT"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -941,17 +943,17 @@ def get_detail_flex():
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
-                {"type": "text", "text": "中途上下車", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "中途上下車（預設：接受）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
                      "action": {"type": "message", "label": "接受中途", "text": "中途:接受"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "僅起迄點", "text": "中途:僅限起迄"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "人數", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "人數（預設：1人）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
                      "action": {"type": "message", "label": "1人", "text": "人數:1"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "2人", "text": "人數:2"}},
@@ -961,9 +963,9 @@ def get_detail_flex():
                      "action": {"type": "message", "label": "4人", "text": "人數:4"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "乘客費用（你期望的收費方式）", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "乘客費用（預設：私訊議價）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
                      "action": {"type": "message", "label": "議價", "text": "費用:私訊議價"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "飲料", "text": "費用:請喝飲料"}}
@@ -975,11 +977,11 @@ def get_detail_flex():
                      "action": {"type": "message", "label": "免費", "text": "費用:免費"}}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "刊登天數（到期自動下架，預設3天）", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "刊登天數（預設：3天）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "1天", "text": "有效:1"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
+                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
                      "action": {"type": "message", "label": "3天", "text": "有效:3"}},
                     {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
                      "action": {"type": "message", "label": "7天", "text": "有效:7"}}
@@ -2266,6 +2268,21 @@ def handle_postback(event):
                 quick_reply=_get_recur_freq_qr(include_cancel=True)
             ))
 
+        elif data.startswith("action=edit_detail"):
+            params = dict(parse_qsl(data))
+            match_id = params.get('id')
+            conn = get_db()
+            try:
+                row = conn.execute(q("SELECT user_id FROM matches WHERE id = ? AND status = 'active'"), (match_id,)).fetchone()
+                if not row or row[0] != uid:
+                    safe_reply(event.reply_token, TextSendMessage(text="⚠️ 找不到此行程。"))
+                    return
+                conn.execute(q("UPDATE user_state SET edit_match_id = ? WHERE user_id = ?"), (match_id, uid))
+                conn.commit()
+            finally:
+                conn.close()
+            safe_reply(event.reply_token, get_detail_flex())
+
         elif data.startswith("contact_line="):
             line_id = data.split("=")[1]
             safe_reply(event.reply_token, TextSendMessage(
@@ -2580,6 +2597,8 @@ def handle_message(event):
                              "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
                             {"type": "button", "style": "secondary", "height": "sm",
                              "action": {"type": "postback", "label": "✏️ 改LINE ID", "data": f"action=edit_line_id&id={m_id}"}},
+                            {"type": "button", "style": "secondary", "height": "sm",
+                             "action": {"type": "postback", "label": "⚙️ 改細節", "data": f"action=edit_detail&id={m_id}"}},
                             {"type": "button", "style": "secondary", "height": "sm",
                              "action": {"type": "datetimepicker", "label": "⏰ 改出發時間",
                                         "data": f"action=edit_time&id={m_id}",
@@ -3222,7 +3241,7 @@ def handle_message(event):
     elif msg.startswith("彈性:"):
         conn = get_db()
         try:
-            res = conn.execute(q('SELECT temp_count, temp_fee, temp_way, temp_expire FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
+            res = conn.execute(q('SELECT temp_count, temp_fee, temp_way, temp_expire, edit_match_id FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
             conn.execute(q('UPDATE user_state SET temp_flex = ? WHERE user_id = ?'), (msg.split(":")[1], uid))
             # 若中途/有效天數未選，設預設值
             if res and not res[2]:
@@ -3233,20 +3252,26 @@ def handle_message(event):
         finally:
             conn.close()
 
-        pc = res[0] if res else None
-        fe = res[1] if res else None
+        pc = (res[0] if res else None) or "1"
+        fe = (res[1] if res else None) or "私訊議價"
+        way = (res[2] if res else None) or "接受"
+        flex_val = msg.split(":")[1]
+        edit_mid = res[4] if res else None
 
-        if not pc or not fe:
-            missing = []
-            if not pc: missing.append("人數")
-            if not fe: missing.append("費用方式")
-            safe_reply(event.reply_token, TextSendMessage(
-                text=f"⚠️ {'、'.join(missing)} 尚未選擇，請返回卡片補填。",
-                quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="↩ 返回設定", text="繼續填寫"))
-                ])
-            ))
-        else:
+        # 改細節模式：直接 UPDATE 已存在的行程
+        if edit_mid:
+            conn3 = get_db()
+            try:
+                conn3.execute(q("UPDATE matches SET p_count=?, fee=?, way_point=?, flexible=? WHERE id=? AND user_id=?"),
+                              (pc, fe, way, flex_val, edit_mid, uid))
+                conn3.execute(q("UPDATE user_state SET edit_match_id=NULL WHERE user_id=?"), (uid,))
+                conn3.commit()
+            finally:
+                conn3.close()
+            safe_reply(event.reply_token, TextSendMessage(text=f"✅ 行程細節已更新\n\n人數：{pc}人\n費用：{fe}\n中途：{way}\n時間彈性：{'±4小時' if flex_val == '願意彈性' else '精確時間'}"))
+            return
+
+        if True:
             # 司機才需要輸入車型，乘客直接進標籤
             conn2 = get_db()
             try:
