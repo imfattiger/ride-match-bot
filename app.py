@@ -1193,7 +1193,7 @@ def get_rules_flex():
     return FlexSendMessage(alt_text="媒合規則說明", contents=bubble)
 
 # --- 被動媒合推播 Flex 卡片 ---
-def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no="", publisher_uid=""):
+def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no="", publisher_uid="", community_tag=""):
     prefs_text = prefs.strip().rstrip(",") if prefs else "（未設定）"
     contact_contents = [{"type": "text", "text": "有人發布了與您同向的行程！", "size": "xs", "color": "#888888", "align": "center"}]
     if line_id:
@@ -1235,10 +1235,14 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
         {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
         {"type": "text", "text": prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]})
 
+    COMMUNITY_LABELS = {"keelung_group": "🏘️ 基隆共乘Plus 社友"}
+    header_contents = [{"type": "text", "text": "🔔 新的順路配對！", "weight": "bold", "color": "#FFFFFF", "size": "sm"}]
+    if community_tag and community_tag in COMMUNITY_LABELS:
+        header_contents.append({"type": "text", "text": COMMUNITY_LABELS[community_tag], "size": "xs", "color": "#d4f5e9"})
     bubble = {
         "type": "bubble",
         "header": {"type": "box", "layout": "vertical",
-            "contents": [{"type": "text", "text": "🔔 新的順路配對！", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
+            "contents": header_contents,
             "backgroundColor": "#1D9E75"},
         "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_contents},
         "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": contact_contents}
@@ -1373,7 +1377,8 @@ def do_publish(uid, reply_token):
             finally:
                 limit_conn.close()
             if is_notify_enabled(m[0]):
-                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt, pn, publisher_uid=uid))
+                match_community = m[16] if (m[16] and m[16] == ref_src) else ""
+                safe_push(m[0], get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, ps, lid, wy, vt, pn, publisher_uid=uid, community_tag=match_community))
 
         rating_conn.close()
         output.append(FlexSendMessage(alt_text="偵測到順路配對！",
@@ -1428,7 +1433,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
         user_direction = 1 if e_w > s_w else (-1 if e_w < s_w else 0)
 
     # 固定路線行程不受日期範圍限制，另外撈出來在 Python 端做時間匹配
-    c.execute(q("""SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id, id, vehicle_type, plate_no, COALESCE(is_recurring,0), recur_weekdays
+    c.execute(q("""SELECT user_id, time_info, s_city, s_dist, e_city, e_dist, fee, way_point, p_count, prefs, line_id, id, vehicle_type, plate_no, COALESCE(is_recurring,0), recur_weekdays, referral_source
                    FROM matches
                    WHERE user_type = ? AND user_id != ? AND status = 'active'
                    AND (
@@ -1450,7 +1455,7 @@ def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_
     user_weekdays = set(int(d) for d in (recur_days or '').split(',') if d.strip().isdigit())
 
     for m in raw_res:
-        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id, m_vt, m_pn, m_is_recur, m_recur_wd = m
+        m_uid, m_time, m_sc, m_sd, m_ec, m_ed, m_fee, m_way, m_pc, m_prefs, m_line_id, m_id, m_vt, m_pn, m_is_recur, m_recur_wd, m_ref_src = m
 
         # 固定路線行程：比對 HH:MM 時間範圍 + 星期
         if m_is_recur:
