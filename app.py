@@ -172,8 +172,24 @@ class _PGWrapper:
 
 def get_db():
     if USE_PG:
-        pool = _ensure_pool()
-        return _PGWrapper(pool.getconn(), pool)
+        global _pg_pool
+        for attempt in range(2):
+            try:
+                pool = _ensure_pool()
+                conn = pool.getconn()
+                # 檢查連線是否仍有效，SSL 斷線時這裡會拋例外
+                conn.cursor().execute("SELECT 1")
+                return _PGWrapper(conn, pool)
+            except Exception as e:
+                logging.warning(f"get_db attempt {attempt+1} failed: {e}")
+                try:
+                    if _pg_pool:
+                        _pg_pool.closeall()
+                except Exception:
+                    pass
+                _pg_pool = None  # 強制下次重建 pool
+                if attempt == 1:
+                    raise
     return sqlite3.connect(DB_NAME)
 
 def q(sql):
