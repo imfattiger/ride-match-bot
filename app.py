@@ -280,6 +280,14 @@ SCHEMA_MIGRATIONS = [
      "CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_uid TEXT, target_uid TEXT, trip_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
     (34, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS edit_match_id TEXT",
          "ALTER TABLE user_state ADD COLUMN edit_match_id TEXT"),
+    (35, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS last_p_count TEXT",
+         "ALTER TABLE user_state ADD COLUMN last_p_count TEXT"),
+    (36, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS last_fee TEXT",
+         "ALTER TABLE user_state ADD COLUMN last_fee TEXT"),
+    (37, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS last_way TEXT",
+         "ALTER TABLE user_state ADD COLUMN last_way TEXT"),
+    (38, "ALTER TABLE user_state ADD COLUMN IF NOT EXISTS last_flex TEXT",
+         "ALTER TABLE user_state ADD COLUMN last_flex TEXT"),
 ]
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]  # 目前最新版本號
 
@@ -906,7 +914,8 @@ def get_main_cat_menu():
         _bubble("🌄 活動類型", [
             ("⛰️ 登山共乘", "登山共乘"), ("🏕️ 露營共乘", "露營共乘"),
             ("🏖️ 海邊衝浪", "海邊衝浪共乘"), ("🚴 單車活動", "單車活動共乘"),
-            ("🎿 滑雪共乘", "滑雪共乘"), ("🎪 演唱會活動", "演唱會活動共乘"),
+            ("🎪 演唱會/音樂祭", "演唱會音樂祭共乘"), ("🏯 廟會繞境", "廟會繞境共乘"),
+            ("🎆 煙火活動", "煙火活動共乘"), ("🏃 路跑馬拉松", "路跑馬拉松共乘"),
         ]),
     ]
     return FlexSendMessage(alt_text="設定特殊需求", contents={"type": "carousel", "contents": bubbles})
@@ -952,74 +961,85 @@ def get_area_carousel(title="請選擇區域"):
         ])
     ]))
 
-def get_detail_flex():
+def get_detail_flex(last_count=None, last_fee=None, last_way=None, last_flex=None):
+    def _btn(label, text, active):
+        b = {"type": "button", "height": "sm", "flex": 1, "action": {"type": "message", "label": label, "text": text}}
+        if active:
+            b["style"] = "primary"
+            b["color"] = "#1D9E75"
+        else:
+            b["style"] = "secondary"
+        return b
+
+    last_count = last_count or "1"
+    last_fee = last_fee or "私訊議價"
+    last_way = last_way or "接受"
+    last_flex = last_flex or "願意彈性"
+
+    fee_map = {"私訊議價": "議價", "請喝飲料": "飲料", "免費公益": "公益", "免費": "免費"}
+    last_fee_label = fee_map.get(last_fee, "議價")
+
     bubble = {
         "type": "bubble",
         "header": {
             "type": "box", "layout": "vertical",
-            "contents": [{"type": "text", "text": "行程細節（依序點選）",
+            "contents": [{"type": "text", "text": "行程細節（綠色為上次設定）",
                           "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
             "backgroundColor": "#444441"
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
             "contents": [
-                {"type": "text", "text": "中途上下車（預設：接受）", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "中途上下車", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
-                     "action": {"type": "message", "label": "接受中途", "text": "中途:接受"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "僅起迄點", "text": "中途:僅限起迄"}}
+                    _btn("接受中途", "中途:接受", last_way == "接受"),
+                    _btn("僅起迄點", "中途:僅限起迄", last_way == "僅限起迄"),
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "人數（預設：1人）", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "人數", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
-                     "action": {"type": "message", "label": "1人", "text": "人數:1"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "2人", "text": "人數:2"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "3人", "text": "人數:3"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "4人", "text": "人數:4"}}
+                    _btn("1人", "人數:1", last_count == "1"),
+                    _btn("2人", "人數:2", last_count == "2"),
+                    _btn("3人", "人數:3", last_count == "3"),
+                    _btn("4人", "人數:4", last_count == "4"),
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "乘客費用（預設：私訊議價）", "size": "sm", "color": "#888780"},
+                {"type": "text", "text": "乘客費用", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
-                     "action": {"type": "message", "label": "議價", "text": "費用:私訊議價"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "飲料", "text": "費用:請喝飲料"}}
+                    _btn("議價", "費用:私訊議價", last_fee_label == "議價"),
+                    _btn("飲料", "費用:請喝飲料", last_fee_label == "飲料"),
                 ]},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "公益", "text": "費用:免費公益"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "免費", "text": "費用:免費"}}
+                    _btn("公益", "費用:免費公益", last_fee_label == "公益"),
+                    _btn("免費", "費用:免費", last_fee_label == "免費"),
                 ]},
                 {"type": "separator"},
                 {"type": "text", "text": "刊登天數（預設：3天）", "size": "sm", "color": "#888780"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "1天", "text": "有效:1"}},
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1, "color": "#1D9E75",
-                     "action": {"type": "message", "label": "3天", "text": "有效:3"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "7天", "text": "有效:7"}}
+                    _btn("1天", "有效:1", False),
+                    _btn("3天", "有效:3", True),
+                    _btn("7天", "有效:7", False),
                 ]},
                 {"type": "separator"},
                 {"type": "text", "text": "時間彈性（點此進入下一步 ↓）", "size": "sm", "color": "#1D9E75", "weight": "bold"},
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
-                    {"type": "button", "style": "primary", "height": "sm", "flex": 1,
-                     "color": "#1D9E75",
-                     "action": {"type": "message", "label": "彈性 ±4hr", "text": "彈性:願意彈性"}},
-                    {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
-                     "action": {"type": "message", "label": "精確時間", "text": "彈性:不願意"}}
+                    _btn("彈性 ±4hr", "彈性:願意彈性", last_flex == "願意彈性"),
+                    _btn("精確時間", "彈性:不願意", last_flex == "不願意"),
                 ]}
             ]
         }
     }
     return FlexSendMessage(alt_text="設定行程細節", contents=bubble)
+
+def _detail_flex_for(uid):
+    conn = get_db()
+    try:
+        row = conn.execute(q("SELECT last_p_count, last_fee, last_way, last_flex FROM user_state WHERE user_id = ?"), (uid,)).fetchone()
+    finally:
+        conn.close()
+    if row:
+        return get_detail_flex(last_count=row[0], last_fee=row[1], last_way=row[2], last_flex=row[3])
+    return get_detail_flex()
 
 
 # --- 免責聲明 Flex 卡片 ---
@@ -1314,6 +1334,8 @@ def do_publish(uid, reply_token):
             if not new_id:
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
                 return
+        conn.execute(q("UPDATE user_state SET last_p_count=?, last_fee=?, last_way=?, last_flex=? WHERE user_id=?"),
+                     (pc, fe, wy, fx, uid))
         conn.commit()
     finally:
         conn.close()
@@ -2307,7 +2329,7 @@ def handle_postback(event):
                 conn.commit()
             finally:
                 conn.close()
-            safe_reply(event.reply_token, get_detail_flex())
+            safe_reply(event.reply_token, _detail_flex_for(uid))
 
         elif data.startswith("contact_line="):
             line_id = data.split("=")[1]
@@ -2723,7 +2745,7 @@ def handle_message(event):
         elif not ec or not ed:
             safe_reply(event.reply_token, get_area_carousel("🏁 選擇【目的地】區域"))
         elif not wy or not pc or not fe or not fx:
-            safe_reply(event.reply_token, get_detail_flex())
+            safe_reply(event.reply_token, _detail_flex_for(uid))
         else:
             safe_reply(event.reply_token, get_main_cat_menu())
         return
@@ -3229,7 +3251,7 @@ def handle_message(event):
         else:
             safe_reply(event.reply_token, [
                 TextSendMessage(text="✅ 路線設定完成！\n\n接下來填寫行程細節：\n・中途：是否接受途中上下車\n・人數：最多幾位乘客\n・乘客費用：你希望的收費方式\n・刊登天數：行程在平台顯示幾天\n\n最後點「時間彈性」進入下一步 👇"),
-                get_detail_flex()
+                _detail_flex_for(uid)
             ])
 
     elif msg.startswith("中途:"):
@@ -3605,13 +3627,15 @@ def handle_message(event):
 
         ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res
 
+        pc = pc or "1"
+        fe = fe or "私訊議價"
+        wy = wy or "接受"
+
         missing = []
         if not tt: missing.append("出發時間")
         if not sc or not sd: missing.append("出發地")
         if not ec or not ed: missing.append("目的地")
-        if not pc: missing.append("人數")
-        if not fe: missing.append("費用方式")
-        if not fx: missing.append("時間彈性")
+        if not fx: missing.append("時間彈性（請回細節卡片選擇）")
 
         if missing:
             safe_reply(event.reply_token, TextSendMessage(
