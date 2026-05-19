@@ -4,71 +4,587 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>sun car 順咖媒合｜台灣共乘媒合 LINE Bot，免費找共乘</title>
-<meta name="description" content="台灣唯一 P2P 共乘 LINE Bot。在 LINE 裡發布行程，自動配對同向乘客或司機，已有 1,000+ 用戶、74 次成功配對。完全免費，不收手續費。">
+<meta name="description" content="台灣唯一 P2P 共乘 LINE Bot。在 LINE 裡發布行程，自動配對同向乘客或司機，已有 1,000+ 用戶、100+ 次成功配對。現階段免費使用。">
 <meta name="keywords" content="共乘,找共乘,台灣共乘,共乘APP,共乘媒合,LINE共乘,P2P共乘,共乘台北,順路帶人,帶貨順路">
 <meta property="og:title" content="sun car 順咖媒合｜台灣共乘媒合 LINE Bot">
-<meta property="og:description" content="在 LINE 裡發布行程，系統自動配對同向乘客或司機。1,000+ 用戶，完全免費。">
+<meta property="og:description" content="在 LINE 裡發布行程，系統自動配對同向乘客或司機。1,000+ 用戶，現階段免費使用。">
 <meta property="og:type" content="website">
+<meta property="og:image" content="https://imfattiger.github.io/ride-match-bot/og-image.png">
+<meta name="theme-color" content="#FAF6EE">
+<link rel="canonical" href="https://imfattiger.github.io/ride-match-bot/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Noto Sans TC',sans-serif;color:#222;line-height:1.75;background:#fff}
+  /* ============================================================
+     SUN CAR 順咖媒合 — Landing Page
+     Tokens from /colors_and_type.css, desaturated palette
+     ============================================================ */
+  :root{
+    --sun-orange:    #D58A3A;   /* warm terracotta (desaturated) */
+    --sun-orange-d:  #B5722A;
+    --sun-orange-l: #E2A968;
+    --sun-yellow:   #E2BA6C;
+    --tire-navy:    #1E5A99;
+    --tire-navy-d:  #143E6E;
+    --paper:        #FAF6EE;
+    --paper-deep:   #F2EBDD;
 
-  /* hero */
-  .hero{background:linear-gradient(135deg,#0a5c36 0%,#1a7a4a 60%,#2ecc71 100%);color:#fff;text-align:center;padding:64px 20px 56px}
-  .hero h1{font-size:2rem;font-weight:700;margin-bottom:10px;letter-spacing:.02em}
-  .hero .sub{font-size:1.1rem;opacity:.9;margin-bottom:32px}
-  .hero .stats{display:flex;justify-content:center;gap:32px;margin-bottom:36px;flex-wrap:wrap}
-  .stat{text-align:center}
-  .stat .num{font-size:2rem;font-weight:700;display:block}
-  .stat .label{font-size:.8rem;opacity:.8}
-  .btn-main{display:inline-block;background:#06c755;color:#fff;padding:16px 40px;border-radius:50px;text-decoration:none;font-size:1.1rem;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:transform .15s}
-  .btn-main:hover{transform:scale(1.04)}
-  .line-id{margin-top:12px;font-size:.85rem;opacity:.75}
+    --driver:       #4DA873;   /* sage */
+    --driver-d:     #3F8C5F;
+    --driver-bg:    #EAF3EE;
+    --seeker:       #5689B4;   /* dusty blue */
+    --seeker-d:     #436F94;
+    --seeker-bg:    #ECF1F6;
 
-  /* sections */
-  section{padding:52px 20px;max-width:720px;margin:0 auto}
-  h2{font-size:1.3rem;font-weight:700;color:#0a5c36;margin-bottom:20px;padding-bottom:8px;border-bottom:2px solid #d4edda}
+    --ink-1:        #1A1D21;
+    --ink-2:        #4A5057;
+    --ink-3:        #7A828B;
+    --ink-4:        #B5BBC2;
+    --line-1:       #E5E0D5;
+    --line-2:       #EEEAE1;
+    --surface-1:    #FFFFFF;
 
-  /* who */
-  .who-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  .who-card{background:#f7fdf9;border:1px solid #c3e6cb;border-radius:12px;padding:20px}
-  .who-card .icon{font-size:1.8rem;margin-bottom:8px}
-  .who-card h3{font-size:1rem;font-weight:700;margin-bottom:6px;color:#0a5c36}
-  .who-card p{font-size:.9rem;color:#444}
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 24px;
+    --r-pill: 999px;
 
-  /* steps */
-  .steps{counter-reset:step}
-  .step{display:flex;gap:16px;margin-bottom:24px;align-items:flex-start}
-  .step-num{background:#0a5c36;color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;flex-shrink:0;margin-top:2px}
-  .step-text h3{font-size:1rem;font-weight:700;margin-bottom:2px}
-  .step-text p{font-size:.9rem;color:#555}
+    --shadow-1: 0 1px 2px rgba(20,30,50,.06), 0 1px 1px rgba(20,30,50,.04);
+    --shadow-2: 0 4px 16px rgba(20,30,50,.08), 0 1px 3px rgba(20,30,50,.04);
+    --shadow-3: 0 16px 40px rgba(20,30,50,.14), 0 3px 8px rgba(20,30,50,.06);
 
-  /* features */
-  .features{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .feature{background:#f7fdf9;border-radius:10px;padding:14px 16px;font-size:.9rem;border-left:3px solid #06c755}
-  .feature strong{display:block;margin-bottom:2px;color:#0a5c36}
-
-  /* faq */
-  .faq-item{margin-bottom:20px}
-  .faq-item dt{font-weight:700;color:#0a5c36;margin-bottom:4px}
-  .faq-item dd{font-size:.92rem;color:#444;margin-left:0}
-
-  /* cta bottom */
-  .cta-bottom{background:#f0faf5;border-top:1px solid #c3e6cb;text-align:center;padding:52px 20px}
-  .cta-bottom h2{border:none;margin-bottom:8px}
-  .cta-bottom p{color:#555;margin-bottom:24px}
-
-  /* footer */
-  footer{text-align:center;padding:24px 20px;font-size:.8rem;color:#999;border-top:1px solid #eee}
-
-  @media(max-width:480px){
-    .hero h1{font-size:1.5rem}
-    .who-grid,.features{grid-template-columns:1fr}
-    .hero .stats{gap:20px}
-    .stat .num{font-size:1.6rem}
+    --font-zh: "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
   }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--font-zh);color:var(--ink-1);
+    background:var(--paper);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+  a{color:inherit;text-decoration:none}
+
+  /* ===================== TOP BAR ===================== */
+  .topbar{
+    position:sticky;top:0;z-index:50;
+    background:rgba(250,246,238,.92);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line-1);
+  }
+  .topbar-inner{
+    max-width:1080px;margin:0 auto;padding:14px 24px;
+    display:flex;align-items:center;gap:16px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+  .brand img{width:32px;height:32px;border-radius:8px}
+  .brand .wm{display:flex;flex-direction:column;line-height:1.1}
+  .brand .wm b{font-size:14px;color:var(--ink-1);letter-spacing:-0.005em}
+  .brand .wm span{font-size:11px;color:var(--ink-3);font-weight:500}
+  .topbar nav{margin-left:auto;display:flex;gap:24px;font-size:13px;color:var(--ink-2);font-weight:500}
+  .topbar nav a:hover{color:var(--ink-1)}
+  .topbar .cta-mini{
+    background:var(--driver);color:#fff;
+    padding:8px 16px;border-radius:var(--r-pill);
+    font-size:13px;font-weight:600;
+  }
+  .topbar .cta-mini:hover{background:var(--driver-d)}
+  @media(max-width:680px){
+    .topbar nav{display:none}
+  }
+
+  /* ===================== HERO ===================== */
+  .hero{
+    position:relative;
+    padding:64px 24px 80px;
+    overflow:hidden;
+    background:
+      radial-gradient(ellipse at 80% 20%, rgba(213,138,58,.10), transparent 50%),
+      radial-gradient(ellipse at 10% 80%, rgba(86,137,180,.08), transparent 55%),
+      var(--paper);
+  }
+  .hero::before{
+    content:"";position:absolute;inset:0;
+    background-image:url("logo-suncar-pattern.png");
+    background-size:280px;background-repeat:repeat;
+    opacity:.06;mix-blend-mode:multiply;
+    pointer-events:none;
+  }
+  .hero-inner{
+    max-width:1080px;margin:0 auto;
+    display:grid;grid-template-columns:1.05fr 1fr;gap:48px;
+    align-items:center;position:relative;z-index:1;
+  }
+  @media(max-width:880px){
+    .hero-inner{grid-template-columns:1fr;gap:40px}
+    .hero{padding:48px 20px 56px}
+  }
+
+  .hero .badge-row{
+    display:flex;align-items:center;gap:8px;
+    font-size:12px;color:var(--ink-3);font-weight:600;
+    letter-spacing:0.08em;text-transform:uppercase;
+    margin-bottom:18px;
+  }
+  .hero .badge-row .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--driver);
+    box-shadow:0 0 0 4px rgba(77,168,115,.18);
+    animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 4px rgba(77,168,115,.18)}
+    50%{box-shadow:0 0 0 8px rgba(77,168,115,.05)}
+  }
+
+  .hero h1{
+    font-size:clamp(32px,5vw,52px);
+    font-weight:800;line-height:1.1;
+    letter-spacing:-0.02em;
+    color:var(--ink-1);
+    margin-bottom:16px;
+  }
+  .hero h1 em{
+    font-style:normal;
+    color:var(--sun-orange-d);
+    position:relative;display:inline-block;
+  }
+  .hero h1 em::after{
+    content:"";position:absolute;left:-2px;right:-2px;bottom:2px;height:10px;
+    background:var(--sun-orange-l);opacity:.32;
+    border-radius:6px;z-index:-1;
+  }
+  .hero .lead{
+    font-size:17px;color:var(--ink-2);
+    line-height:1.7;margin-bottom:28px;
+    max-width:480px;
+  }
+
+  .hero .stats{
+    display:flex;gap:32px;margin-bottom:32px;flex-wrap:wrap;
+    padding:18px 22px;
+    background:#fff;border-radius:var(--r-lg);
+    border:1px solid var(--line-1);
+    box-shadow:var(--shadow-1);
+    max-width:480px;
+  }
+  .hero .stats .stat{flex:1;min-width:90px}
+  .hero .stats .num{
+    font-size:26px;font-weight:800;color:var(--ink-1);
+    letter-spacing:-0.02em;line-height:1;
+    display:block;margin-bottom:4px;
+  }
+  .hero .stats .num em{
+    font-style:normal;font-size:16px;color:var(--driver-d);font-weight:700;
+    margin-left:2px;
+  }
+  .hero .stats .label{font-size:11px;color:var(--ink-3);font-weight:500}
+
+  .hero .cta-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    height:52px;padding:0 24px;
+    border-radius:var(--r-pill);
+    font-size:15px;font-weight:700;
+    border:none;cursor:pointer;font-family:inherit;
+    transition:transform 120ms ease, box-shadow 200ms;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-primary{
+    background:var(--driver);color:#fff;
+    box-shadow:0 4px 16px rgba(77,168,115,.32);
+  }
+  .btn-primary:hover{background:var(--driver-d);box-shadow:0 6px 20px rgba(63,140,95,.4)}
+  .btn-ghost{
+    background:transparent;color:var(--ink-1);
+    border:1.5px solid var(--line-1);
+    box-shadow:none;
+  }
+  .btn-ghost:hover{background:#fff}
+  .lineid{
+    font-size:13px;color:var(--ink-3);font-weight:500;
+    display:flex;align-items:center;gap:6px;
+  }
+  .lineid code{
+    font-family:"JetBrains Mono",monospace;
+    background:#fff;padding:3px 8px;border-radius:6px;
+    color:var(--ink-1);font-weight:600;border:1px solid var(--line-1);font-size:12px;
+  }
+
+  /* ---- Hero visual: phone with redesigned card ---- */
+  .hero-visual{
+    position:relative;
+    display:flex;justify-content:center;
+  }
+  .phone{
+    width:280px;height:560px;
+    background:#1B1B1B;border-radius:38px;
+    padding:8px;
+    box-shadow:0 30px 60px rgba(20,30,50,.28),0 10px 24px rgba(20,30,50,.16);
+    position:relative;
+    transform:rotate(-3deg);
+  }
+  .phone::before{
+    content:"";position:absolute;top:18px;left:50%;
+    transform:translateX(-50%);
+    width:90px;height:22px;background:#000;border-radius:14px;z-index:2;
+  }
+  .phone-screen{
+    width:100%;height:100%;border-radius:30px;
+    background:#1B1B1B;overflow:hidden;
+    display:flex;flex-direction:column;padding-top:46px;
+  }
+  .phone .chat{
+    flex:1;padding:12px;display:flex;flex-direction:column;gap:10px;
+  }
+  .phone .bot-bubble{
+    background:#fff;color:var(--ink-1);
+    border-radius:4px 14px 14px 14px;
+    padding:8px 12px;font-size:11px;line-height:1.5;
+    max-width:80%;align-self:flex-start;
+  }
+  .phone .user-bubble{
+    background:#95E472;color:var(--ink-1);
+    border-radius:14px 4px 14px 14px;
+    padding:8px 12px;font-size:11px;
+    align-self:flex-end;max-width:70%;
+  }
+  .phone .card{
+    background:#fff;border-radius:14px;
+    align-self:flex-start;width:90%;
+    overflow:hidden;
+    box-shadow:0 2px 8px rgba(0,0,0,.4);
+  }
+  .phone .card .h{
+    background:var(--driver);color:#fff;
+    padding:10px 12px;display:flex;align-items:center;gap:8px;
+    font-size:11px;font-weight:700;
+  }
+  .phone .card .h .b{
+    width:22px;height:22px;border-radius:7px;
+    background:rgba(255,255,255,.22);
+    display:grid;place-items:center;font-size:11px;
+  }
+  .phone .card .h .r{
+    margin-left:auto;background:rgba(255,255,255,.2);
+    padding:2px 6px;border-radius:999px;font-size:9px;
+  }
+  .phone .card .route{padding:10px 12px 4px;display:flex;gap:8px}
+  .phone .card .pin{display:flex;flex-direction:column;align-items:center;padding-top:3px}
+  .phone .card .pin .d{width:6px;height:6px;border-radius:50%;background:var(--driver);box-shadow:0 0 0 2px var(--driver-bg)}
+  .phone .card .pin .l{width:1.5px;height:14px;background:#B5BBC2;margin:2px 0}
+  .phone .card .pin .e{width:6px;height:6px;background:var(--ink-1);border-radius:1px}
+  .phone .card .c{font-size:9px;color:var(--ink-3);line-height:1.2}
+  .phone .card .dst{font-size:11px;color:var(--ink-1);font-weight:700}
+  .phone .card .meta{padding:4px 12px 8px;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .phone .card .mc{background:#F7F8FA;border-radius:7px;padding:5px 7px}
+  .phone .card .mk{font-size:8px;color:var(--ink-3);font-weight:600;text-transform:uppercase}
+  .phone .card .mv{font-size:10px;color:var(--ink-1);font-weight:700;margin-top:1px}
+  .phone .card .foot{padding:6px 10px 10px;border-top:1px solid var(--line-2)}
+  .phone .card .cta{
+    width:100%;height:30px;background:var(--driver);color:#fff;
+    border:none;border-radius:8px;font-size:11px;font-weight:700;
+  }
+
+  /* hero callouts floating around phone */
+  .hero-visual .pill{
+    position:absolute;
+    background:#fff;border:1px solid var(--line-1);
+    box-shadow:var(--shadow-2);
+    padding:8px 14px;border-radius:var(--r-pill);
+    font-size:12px;font-weight:600;color:var(--ink-2);
+    display:flex;align-items:center;gap:6px;
+  }
+  .hero-visual .pill.p1{top:8%;left:0;animation:floata 5s ease-in-out infinite}
+  .hero-visual .pill.p2{top:42%;right:-10px;animation:floatb 5.5s ease-in-out infinite}
+  .hero-visual .pill.p3{bottom:8%;left:-10px;animation:floata 6s ease-in-out infinite}
+  .hero-visual .pill b{color:var(--driver-d)}
+  @keyframes floata{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @keyframes floatb{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+  @media(max-width:880px){
+    .phone{transform:rotate(-2deg) scale(.85);transform-origin:center top}
+    .hero-visual .pill.p1{left:5%}
+    .hero-visual .pill.p3{left:5%}
+  }
+
+  /* ===================== SECTION SHELL ===================== */
+  section{padding:80px 24px;position:relative}
+  .section-inner{max-width:1080px;margin:0 auto}
+  .eyebrow{
+    display:inline-block;font-size:11px;color:var(--sun-orange-d);
+    font-weight:700;letter-spacing:0.16em;text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  .section-head{margin-bottom:48px;max-width:640px}
+  .section-head h2{
+    font-size:clamp(26px,3.4vw,36px);font-weight:800;
+    letter-spacing:-0.015em;line-height:1.2;color:var(--ink-1);
+    margin-bottom:12px;
+  }
+  .section-head p{font-size:16px;color:var(--ink-2);line-height:1.7}
+  @media(max-width:680px){
+    section{padding:56px 20px}
+    .section-head{margin-bottom:32px}
+  }
+
+  /* ===================== WHO ===================== */
+  .who{background:var(--surface-1);border-top:1px solid var(--line-1);border-bottom:1px solid var(--line-1)}
+  .who-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .who-card{
+    background:var(--paper);border:1px solid var(--line-1);
+    border-radius:var(--r-xl);padding:32px;
+    transition:transform 200ms ease, box-shadow 200ms;
+    position:relative;overflow:hidden;
+  }
+  .who-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-2)}
+  .who-card.driver{border-top:4px solid var(--driver)}
+  .who-card.seeker{border-top:4px solid var(--seeker)}
+  .who-card .pic{
+    width:56px;height:56px;border-radius:16px;
+    display:grid;place-items:center;font-size:28px;
+    margin-bottom:20px;
+  }
+  .who-card.driver .pic{background:var(--driver-bg)}
+  .who-card.seeker .pic{background:var(--seeker-bg)}
+  .who-card h3{
+    font-size:20px;font-weight:700;margin-bottom:8px;
+    color:var(--ink-1);letter-spacing:-0.005em;
+  }
+  .who-card p{font-size:14px;color:var(--ink-2);line-height:1.7;margin-bottom:18px}
+  .who-card ul{list-style:none;font-size:13px;color:var(--ink-2)}
+  .who-card ul li{
+    padding:5px 0;display:flex;align-items:center;gap:8px;
+  }
+  .who-card ul li::before{
+    content:"";width:14px;height:14px;border-radius:50%;
+    background:var(--driver-bg);color:var(--driver-d);
+    display:grid;place-items:center;font-size:9px;font-weight:700;
+    flex-shrink:0;
+    background-image:linear-gradient(45deg,transparent 45%, var(--driver-d) 45%, var(--driver-d) 55%, transparent 55%),
+                    linear-gradient(-45deg,transparent 45%, var(--driver-d) 45%, var(--driver-d) 55%, transparent 55%);
+    background-size:50% 2px,50% 2px;
+    background-position:30% 60%,70% 60%;
+    background-repeat:no-repeat;
+    background-color:var(--driver-bg);
+  }
+  .who-card.seeker ul li::before{
+    background-color:var(--seeker-bg);
+    background-image:linear-gradient(45deg,transparent 45%, var(--seeker-d) 45%, var(--seeker-d) 55%, transparent 55%),
+                    linear-gradient(-45deg,transparent 45%, var(--seeker-d) 45%, var(--seeker-d) 55%, transparent 55%);
+  }
+
+  @media(max-width:680px){
+    .who-grid{grid-template-columns:1fr}
+  }
+
+  /* ===================== HOW ===================== */
+  .how{background:var(--paper)}
+  .steps{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:20px;
+    position:relative;
+  }
+  .steps::before{
+    content:"";position:absolute;
+    top:28px;left:12%;right:12%;height:2px;
+    background:repeating-linear-gradient(to right, var(--ink-4) 0 4px, transparent 4px 10px);
+    z-index:0;
+  }
+  .step{position:relative;text-align:center;z-index:1}
+  .step .num{
+    width:56px;height:56px;border-radius:50%;
+    background:#fff;color:var(--sun-orange-d);
+    border:2px solid var(--sun-orange);
+    font-size:20px;font-weight:800;
+    display:grid;place-items:center;
+    margin:0 auto 16px;
+    box-shadow:0 4px 12px rgba(213,138,58,.20);
+  }
+  .step h3{font-size:15px;font-weight:700;color:var(--ink-1);margin-bottom:6px}
+  .step p{font-size:13px;color:var(--ink-2);line-height:1.6}
+
+  @media(max-width:680px){
+    .steps{grid-template-columns:1fr;gap:24px}
+    .steps::before{display:none}
+    .step{text-align:left;display:grid;grid-template-columns:56px 1fr;gap:14px;align-items:start}
+    .step .num{margin:0}
+  }
+
+  /* ===================== FEATURES ===================== */
+  .features{background:var(--surface-1);border-top:1px solid var(--line-1);border-bottom:1px solid var(--line-1)}
+  .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .feature{
+    background:var(--paper);
+    border:1px solid var(--line-1);
+    border-radius:var(--r-lg);padding:22px;
+    transition:border-color 200ms, transform 200ms;
+  }
+  .feature:hover{border-color:var(--sun-orange-l);transform:translateY(-2px)}
+  .feature .icn{
+    width:36px;height:36px;border-radius:10px;
+    background:var(--driver-bg);color:var(--driver-d);
+    display:grid;place-items:center;font-size:16px;
+    margin-bottom:14px;
+  }
+  .feature h3{font-size:14px;font-weight:700;color:var(--ink-1);margin-bottom:4px}
+  .feature p{font-size:13px;color:var(--ink-2);line-height:1.6}
+  @media(max-width:880px){.features-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:580px){.features-grid{grid-template-columns:1fr}}
+
+  /* ===================== ROUTES ===================== */
+  .routes{background:var(--paper-deep);position:relative;overflow:hidden}
+  .routes::before{
+    content:"";position:absolute;inset:0;
+    background-image:url("logo-suncar-pattern.png");
+    background-size:240px;opacity:.05;mix-blend-mode:multiply;
+    pointer-events:none;
+  }
+  .routes-grid{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:12px;
+    position:relative;z-index:1;
+  }
+  .route{
+    background:#fff;border-radius:var(--r-lg);
+    padding:18px 20px;display:flex;align-items:center;gap:14px;
+    border:1px solid var(--line-1);
+    transition:transform 200ms, box-shadow 200ms;
+  }
+  .route:hover{transform:translateX(4px);box-shadow:var(--shadow-2)}
+  .route .from, .route .to{
+    display:flex;flex-direction:column;
+  }
+  .route .from .label, .route .to .label{font-size:10px;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em}
+  .route .from .city, .route .to .city{font-size:15px;color:var(--ink-1);font-weight:700;letter-spacing:-0.005em}
+  .route .arrow{
+    flex-shrink:0;color:var(--sun-orange);
+    font-size:18px;display:flex;align-items:center;
+  }
+  .route .desc{
+    margin-left:auto;font-size:11px;color:var(--ink-3);
+    text-align:right;line-height:1.4;max-width:140px;
+  }
+  .routes-note{
+    margin-top:24px;text-align:center;font-size:13px;color:var(--ink-3);
+    position:relative;z-index:1;
+  }
+  @media(max-width:680px){
+    .routes-grid{grid-template-columns:1fr}
+    .route .desc{display:none}
+  }
+
+  /* ===================== FAQ ===================== */
+  .faq{background:var(--surface-1);border-top:1px solid var(--line-1)}
+  .faq-list{max-width:760px}
+  .faq-item{
+    border-bottom:1px solid var(--line-1);
+    padding:24px 0;
+  }
+  .faq-item:first-child{border-top:1px solid var(--line-1)}
+  .faq-item summary{
+    cursor:pointer;list-style:none;
+    display:flex;align-items:center;gap:16px;
+    font-size:17px;font-weight:600;color:var(--ink-1);
+    letter-spacing:-0.005em;
+  }
+  .faq-item summary::-webkit-details-marker{display:none}
+  .faq-item summary::after{
+    content:"+";margin-left:auto;
+    font-size:24px;font-weight:300;color:var(--ink-3);
+    transition:transform 200ms;width:24px;height:24px;
+    display:grid;place-items:center;
+  }
+  .faq-item[open] summary::after{content:"−"}
+  .faq-item .a{
+    font-size:14.5px;color:var(--ink-2);line-height:1.75;
+    margin-top:12px;padding-right:40px;
+  }
+
+  /* ===================== CTA BOTTOM ===================== */
+  .cta-bottom{
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(213,138,58,.14), transparent 60%),
+      var(--paper);
+    padding:80px 24px;text-align:center;
+    border-top:1px solid var(--line-1);
+    position:relative;overflow:hidden;
+  }
+  .cta-bottom::before{
+    content:"";position:absolute;inset:0;
+    background-image:url("logo-suncar-pattern.png");
+    background-size:280px;opacity:.05;mix-blend-mode:multiply;
+    pointer-events:none;
+  }
+  .cta-bottom .inner{position:relative;z-index:1;max-width:560px;margin:0 auto}
+  .cta-bottom img.qr{
+    width:128px;height:128px;border-radius:var(--r-lg);
+    border:1px solid var(--line-1);background:#fff;padding:6px;
+    box-shadow:var(--shadow-2);margin-bottom:24px;
+  }
+  .cta-bottom h2{
+    font-size:clamp(26px,3.6vw,36px);font-weight:800;
+    color:var(--ink-1);margin-bottom:12px;letter-spacing:-0.015em;
+  }
+  .cta-bottom p{color:var(--ink-2);font-size:16px;margin-bottom:28px}
+  .cta-bottom .btn{margin:0 auto}
+
+  .social-divider{
+    display:flex;align-items:center;gap:12px;
+    margin:36px auto 18px;max-width:420px;
+    font-size:12px;color:var(--ink-3);font-weight:600;
+    letter-spacing:0.06em;
+  }
+  .social-divider::before,
+  .social-divider::after{
+    content:"";flex:1;height:1px;background:var(--line-1);
+  }
+  .social-row{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;
+    max-width:520px;margin:0 auto;
+  }
+  .social-card{
+    display:flex;align-items:center;gap:12px;text-align:left;
+    background:#fff;border:1px solid var(--line-1);
+    border-radius:var(--r-lg);padding:14px 16px;
+    transition:transform 200ms ease, box-shadow 200ms, border-color 200ms;
+  }
+  .social-card:hover{
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-2);
+    border-color:#1877F2;
+  }
+  .social-icon{
+    width:38px;height:38px;border-radius:11px;flex-shrink:0;
+    background:#1877F2;color:#fff;
+    display:grid;place-items:center;
+  }
+  .social-text{display:flex;flex-direction:column;line-height:1.3;min-width:0;flex:1}
+  .social-kind{font-size:10.5px;color:var(--ink-3);font-weight:600;letter-spacing:0.04em;text-transform:uppercase}
+  .social-name{font-size:13.5px;color:var(--ink-1);font-weight:700;letter-spacing:-0.005em}
+  .social-arrow{color:var(--ink-3);font-size:14px;flex-shrink:0}
+  .social-card:hover .social-arrow{color:#1877F2;transform:translateX(2px);transition:transform 200ms}
+  @media(max-width:560px){
+    .social-row{grid-template-columns:1fr}
+  }
+
+  /* ===================== FOOTER ===================== */
+  footer{
+    background:var(--paper-deep);
+    padding:32px 24px;
+    border-top:1px solid var(--line-1);
+    color:var(--ink-3);font-size:12px;
+    text-align:center;
+  }
+  footer .row{
+    max-width:1080px;margin:0 auto;
+    display:flex;flex-wrap:wrap;gap:16px;
+    align-items:center;justify-content:center;
+  }
+  footer a{color:var(--ink-2)}
+  footer a:hover{color:var(--ink-1)}
+  footer .sep{color:var(--ink-4)}
+  footer small{display:block;margin-top:12px;color:var(--ink-4)}
 </style>
 <script type="application/ld+json">
 {
@@ -76,134 +592,358 @@
   "@type":"FAQPage",
   "mainEntity":[
     {"@type":"Question","name":"sun car 是什麼？","acceptedAnswer":{"@type":"Answer","text":"sun car 順咖媒合是台灣唯一的 P2P 共乘 LINE Bot，讓司機和乘客在 LINE 內完成發布行程、自動配對、互相聯絡，完全不用下載 App。"}},
-    {"@type":"Question","name":"共乘費用怎麼算？","acceptedAnswer":{"@type":"Answer","text":"平台媒合服務完全免費。司機與乘客之間的費用（油資、過路費分攤）由雙方自行協議，平台不經手任何金流。"}},
+    {"@type":"Question","name":"共乘費用怎麼算？","acceptedAnswer":{"@type":"Answer","text":"平台現階段免費使用，且不介入司機與乘客之間的議價。油資、過路費分攤由雙方自行協議，平台不經手任何金流。"}},
     {"@type":"Question","name":"如何開始使用？","acceptedAnswer":{"@type":"Answer","text":"在 LINE 搜尋『sun car 順咖媒合』或搜尋帳號 @321nmofi，加入好友後同意使用條款即可發布行程。"}},
     {"@type":"Question","name":"配對後怎麼聯絡？","acceptedAnswer":{"@type":"Answer","text":"配對成功後，系統會分別通知雙方，並提供對方的 LINE ID，由雙方自行加好友聯絡細節。"}}
   ]
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"WebSite",
+  "name":"sun car 順咖媒合",
+  "alternateName":"SUN CAR",
+  "url":"https://imfattiger.github.io/ride-match-bot/",
+  "description":"台灣 P2P 共乘媒合 LINE Bot，免費自動配對同向行程",
+  "inLanguage":"zh-TW"
+}
+</script>
 </head>
 <body>
 
-<!-- HERO -->
-<div class="hero">
-  <h1>🚗 sun car 順咖媒合</h1>
-  <p class="sub">台灣 P2P 共乘媒合 LINE Bot｜自動配對，省錢又環保</p>
-  <div class="stats">
-    <div class="stat"><span class="num">1,000+</span><span class="label">加入用戶</span></div>
-    <div class="stat"><span class="num">74</span><span class="label">成功配對</span></div>
-    <div class="stat"><span class="num">免費</span><span class="label">零手續費</span></div>
-  </div>
-  <a class="btn-main" href="https://line.me/R/ti/p/@321nmofi">➕ 加入 LINE Bot 開始找共乘</a>
-  <p class="line-id">LINE 搜尋帳號：@321nmofi</p>
-</div>
-
-<!-- WHO -->
-<section>
-  <h2>適合誰使用</h2>
-  <div class="who-grid">
-    <div class="who-card">
-      <div class="icon">🚗</div>
-      <h3>司機／貨主</h3>
-      <p>長途有空位，順路帶人或帶貨，分攤油資過路費。</p>
-    </div>
-    <div class="who-card">
-      <div class="icon">🙋</div>
-      <h3>乘客／寄物方</h3>
-      <p>需要搭車或寄送物品，找順路的人，比計程車便宜。</p>
-    </div>
-  </div>
-</section>
-
-<!-- HOW -->
-<section style="background:#fafafa;max-width:100%;padding:52px 0">
-<div style="max-width:720px;margin:0 auto;padding:0 20px">
-  <h2>怎麼用？四步搞定</h2>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-text"><h3>加入 LINE Bot</h3><p>搜尋 @321nmofi，30 秒完成，不用下載 App。</p></div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-text"><h3>同意條款，選擇身份</h3><p>司機或乘客，發布你的行程時間與起訖點。</p></div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-text"><h3>系統自動配對</h3><p>智慧比對方向、時間、地點，找到同向行程。</p></div>
-    </div>
-    <div class="step">
-      <div class="step-num">4</div>
-      <div class="step-text"><h3>收到通知，直接聯絡</h3><p>配對成功 LINE 主動通知，取得對方聯絡方式。</p></div>
-    </div>
+<!-- ==================== TOP BAR ==================== -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#top">
+      <img src="logo-suncar.png" alt="sun car 順咖媒合 logo" />
+      <div class="wm"><b>sun car 順咖媒合</b><span>LINE 共乘服務</span></div>
+    </a>
+    <nav>
+      <a href="#who">適合誰</a>
+      <a href="#how">怎麼用</a>
+      <a href="#features">特色</a>
+      <a href="#routes">熱門路線</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="cta-mini" href="https://line.me/R/ti/p/@321nmofi">＋ 加入</a>
   </div>
 </div>
-</section>
 
-<!-- FEATURES -->
-<section>
-  <h2>為什麼比社群發文好用</h2>
-  <div class="features">
-    <div class="feature"><strong>自動方向配對</strong>北→南只配北→南，不會亂配</div>
-    <div class="feature"><strong>時間彈性搜尋</strong>前後 1～4 小時範圍，容錯更高</div>
-    <div class="feature"><strong>支援中途上下車</strong>可設定中繼點，不只點對點</div>
-    <div class="feature"><strong>順路帶貨／寄物</strong>不只搭人，貨物也能媒合</div>
-    <div class="feature"><strong>互評系統</strong>配對完成後互評，安全有保障</div>
-    <div class="feature"><strong>全程在 LINE 完成</strong>不用跳去外部網站或 App</div>
+<!-- ==================== HERO ==================== -->
+<div class="hero" id="top">
+  <div class="hero-inner">
+    <div class="hero-text">
+      <div class="badge-row">
+        <span class="dot"></span>
+        <span>1,000+ 用戶正在共乘媒合中</span>
+      </div>
+      <h1>順路<em>共乘</em>，<br/>在 LINE 裡就搞定。</h1>
+      <p class="lead">
+        台灣唯一的 P2P 共乘 LINE Bot。發布你的行程，系統自動配對同向司機或乘客，
+        省錢、省油、不用裝 App。
+      </p>
+      <div class="stats">
+        <div class="stat"><span class="num">1,000<em>+</em></span><span class="label">加入用戶</span></div>
+        <div class="stat"><span class="num">100<em>+</em></span><span class="label">成功配對</span></div>
+        <div class="stat"><span class="num">中立</span><span class="label">不介入議價</span></div>
+      </div>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://line.me/R/ti/p/@321nmofi">
+          <span style="font-size:18px">＋</span> 加入 LINE Bot
+        </a>
+        <a class="btn btn-ghost" href="#how">看看怎麼用</a>
+        <a class="lineid" href="https://www.facebook.com/share/g/1BoEEHjgEf/" target="_blank" rel="noopener">或加入 <code>Facebook 社團</code></a>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="pill p1">🎯 <span>系統自動<b>同向配對</b></span></div>
+      <div class="pill p2">⏱️ <span><b>±1～4 小時</b>彈性時間</span></div>
+      <div class="pill p3">📦 <span>順路<b>帶貨／寄物</b></span></div>
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="chat">
+            <div class="bot-bubble">📍 配對通知 · 有人發布了同向行程！</div>
+            <div class="card">
+              <div class="h">
+                <div class="b">🚗</div>
+                <div>
+                  <div>司機 · Driver</div>
+                  <div style="opacity:.85;font-size:9px;font-weight:500">提供座位</div>
+                </div>
+                <div class="r">⭐ 4.8</div>
+              </div>
+              <div class="route">
+                <div class="pin"><div class="d"></div><div class="l"></div><div class="e"></div></div>
+                <div>
+                  <div class="c">基隆市</div><div class="dst">中正區</div>
+                  <div style="height:5px"></div>
+                  <div class="c">台北市</div><div class="dst">信義區</div>
+                </div>
+              </div>
+              <div class="meta">
+                <div class="mc"><div class="mk">出發</div><div class="mv">05/15 18:00</div></div>
+                <div class="mc"><div class="mk">座位</div><div class="mv">3 人</div></div>
+              </div>
+              <div class="foot">
+                <button class="cta">💬 加 LINE 聯絡</button>
+              </div>
+            </div>
+            <div class="user-bubble">收到！我加好友囉</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-</section>
-
-<!-- FAQ -->
-<section style="background:#fafafa;max-width:100%;padding:52px 0">
-<div style="max-width:720px;margin:0 auto;padding:0 20px">
-  <h2>常見問題</h2>
-  <dl>
-    <div class="faq-item">
-      <dt>要收費嗎？</dt>
-      <dd>平台媒合完全免費，不收手續費。司機與乘客之間的油資分攤由雙方自行協議。</dd>
-    </div>
-    <div class="faq-item">
-      <dt>共乘合法嗎？</dt>
-      <dd>合法。依交通部函釋，分攤油資、過路費的共乘行為不屬於汽車運輸業。平台媒合不經手車資。</dd>
-    </div>
-    <div class="faq-item">
-      <dt>配對後怎麼聯絡？</dt>
-      <dd>配對成功後系統推播通知，並提供對方 LINE ID，由雙方自行聯絡細節。</dd>
-    </div>
-    <div class="faq-item">
-      <dt>只有台北可以用嗎？</dt>
-      <dd>全台皆可，目前北部用戶較多，正在擴展中。南部歡迎加入！</dd>
-    </div>
-  </dl>
 </div>
-</section>
 
-<!-- ROUTES -->
-<section>
-  <h2>熱門共乘路線</h2>
-  <p style="color:#555;font-size:.92rem;margin-bottom:20px">以下路線每天都有用戶在發布行程，加入後即可自動配對：</p>
-  <div class="features">
-    <div class="feature"><strong>基隆 ↔ 台北共乘</strong>基隆市區、暖暖、七堵往返台北</div>
-    <div class="feature"><strong>基隆 ↔ 內科共乘</strong>基隆往返內湖科技園區上下班</div>
-    <div class="feature"><strong>基隆 ↔ 南港共乘</strong>南港展覽館、南港車站周邊</div>
-    <div class="feature"><strong>新竹 ↔ 台北共乘</strong>新竹科學園區往返台北</div>
-    <div class="feature"><strong>桃園 ↔ 台北共乘</strong>桃園各區往返台北市</div>
-    <div class="feature"><strong>台中 ↔ 台北共乘</strong>長途順路，分攤高速公路費用</div>
+<!-- ==================== WHO ==================== -->
+<section class="who" id="who">
+  <div class="section-inner">
+    <div class="section-head">
+      <span class="eyebrow">適合誰使用</span>
+      <h2>有空位想分攤油資？<br/>還是要搭車想省點錢？</h2>
+      <p>不管你是哪一邊，都能在 LINE 裡找到順路的人。</p>
+    </div>
+    <div class="who-grid">
+      <div class="who-card driver">
+        <div class="pic">🚗</div>
+        <h3>司機 ／ 貨主</h3>
+        <p>長途有空位，順路帶人或帶貨，分攤油資與過路費。</p>
+        <ul>
+          <li>每週固定通勤路線可循環發布</li>
+          <li>支援中途上下車，乘客可彈性</li>
+          <li>互評系統累積信用</li>
+        </ul>
+      </div>
+      <div class="who-card seeker">
+        <div class="pic">🙋</div>
+        <h3>乘客 ／ 寄物方</h3>
+        <p>需要搭車或寄送物品，找順路的車，比計程車便宜很多。</p>
+        <ul>
+          <li>±1～4 小時彈性配對</li>
+          <li>順路寄物，不必親自跑一趟</li>
+          <li>價格雙方議定，平台不介入議價</li>
+        </ul>
+      </div>
+    </div>
   </div>
-  <p style="margin-top:20px;font-size:.88rem;color:#888">找不到你的路線？發布行程後系統全台配對，任何起訖點都可以試試。</p>
 </section>
 
-<!-- CTA BOTTOM -->
+<!-- ==================== HOW ==================== -->
+<section class="how" id="how">
+  <div class="section-inner">
+    <div class="section-head">
+      <span class="eyebrow">怎麼用</span>
+      <h2>四個步驟，全程在 LINE 完成。</h2>
+      <p>不用下載 App、不用註冊、不用填表單，加入好友 30 秒就能開始。</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>加入 LINE Bot</h3>
+        <p>搜尋 <code style="font-family:inherit;background:#fff;padding:1px 5px;border-radius:4px;font-size:12px">@321nmofi</code>，30 秒完成。</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>選擇身份</h3>
+        <p>司機或乘客，發布行程的時間與起訖點。</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>系統自動配對</h3>
+        <p>智慧比對方向、時間、地點，找到同向行程。</p>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <h3>收到通知，直接聯絡</h3>
+        <p>配對成功 LINE 主動推播，取得對方聯絡方式。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FEATURES ==================== -->
+<section class="features" id="features">
+  <div class="section-inner">
+    <div class="section-head">
+      <span class="eyebrow">為什麼好用</span>
+      <h2>比社群貼文好用的地方</h2>
+      <p>在 FB 社團或 LINE 群組找共乘，每天都要翻幾百則訊息。讓系統幫你做這件事。</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature">
+        <div class="icn">🎯</div>
+        <h3>自動方向配對</h3>
+        <p>北→南只配北→南，不會推給你反方向的行程。</p>
+      </div>
+      <div class="feature">
+        <div class="icn">⏱️</div>
+        <h3>時間彈性搜尋</h3>
+        <p>前後 1～4 小時範圍可調，容錯更高。</p>
+      </div>
+      <div class="feature">
+        <div class="icn">📍</div>
+        <h3>支援中途上下車</h3>
+        <p>司機開啟後可設中繼點，不只點對點。</p>
+      </div>
+      <div class="feature">
+        <div class="icn">📦</div>
+        <h3>順路帶貨／寄物</h3>
+        <p>不只搭人，貨物也能媒合，跨城市寄送。</p>
+      </div>
+      <div class="feature">
+        <div class="icn">⭐</div>
+        <h3>互評系統</h3>
+        <p>配對完成後互評，累積信用更安全。</p>
+      </div>
+      <div class="feature">
+        <div class="icn">💬</div>
+        <h3>全程在 LINE</h3>
+        <p>不用跳去外部網站或下載 App。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== ROUTES ==================== -->
+<section class="routes" id="routes">
+  <div class="section-inner">
+    <div class="section-head">
+      <span class="eyebrow">熱門路線</span>
+      <h2>每天都有人在這些路線上發行程</h2>
+      <p>以下是目前活躍度最高的共乘路線，加入後即可自動配對。</p>
+    </div>
+    <div class="routes-grid">
+      <div class="route">
+        <div class="from"><span class="label">FROM</span><span class="city">基隆</span></div>
+        <span class="arrow">→</span>
+        <div class="to"><span class="label">TO</span><span class="city">台北</span></div>
+        <span class="desc">基隆市區、暖暖、七堵往返台北</span>
+      </div>
+      <div class="route">
+        <div class="from"><span class="label">FROM</span><span class="city">基隆</span></div>
+        <span class="arrow">→</span>
+        <div class="to"><span class="label">TO</span><span class="city">內科</span></div>
+        <span class="desc">基隆往返內湖科技園區上下班</span>
+      </div>
+      <div class="route">
+        <div class="from"><span class="label">FROM</span><span class="city">基隆</span></div>
+        <span class="arrow">→</span>
+        <div class="to"><span class="label">TO</span><span class="city">南港</span></div>
+        <span class="desc">南港展覽館、南港車站周邊</span>
+      </div>
+      <div class="route">
+        <div class="from"><span class="label">FROM</span><span class="city">新竹</span></div>
+        <span class="arrow">→</span>
+        <div class="to"><span class="label">TO</span><span class="city">台北</span></div>
+        <span class="desc">新竹科學園區往返台北</span>
+      </div>
+      <div class="route">
+        <div class="from"><span class="label">FROM</span><span class="city">桃園</span></div>
+        <span class="arrow">→</span>
+        <div class="to"><span class="label">TO</span><span class="city">台北</span></div>
+        <span class="desc">桃園各區往返台北市</span>
+      </div>
+      <div class="route">
+        <div class="from"><span class="label">FROM</span><span class="city">台中</span></div>
+        <span class="arrow">→</span>
+        <div class="to"><span class="label">TO</span><span class="city">台北</span></div>
+        <span class="desc">長途順路，分攤高速公路費用</span>
+      </div>
+    </div>
+    <p class="routes-note">找不到你的路線？發布行程後系統全台配對，任何起訖點都可以試試。</p>
+  </div>
+</section>
+
+<!-- ==================== FAQ ==================== -->
+<section class="faq" id="faq">
+  <div class="section-inner">
+    <div class="section-head">
+      <span class="eyebrow">常見問題</span>
+      <h2>還有疑問嗎？</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item" open>
+        <summary>要收費嗎？</summary>
+        <div class="a">目前<b>免費使用</b>，平台不介入司機與乘客之間的議價。油資分攤由雙方自行協議，平台不經手任何金流。</div>
+      </details>
+      <details class="faq-item">
+        <summary>共乘合法嗎？</summary>
+        <div class="a">合法。依交通部函釋，分攤油資、過路費的共乘行為<b>不屬於汽車運輸業</b>。平台僅提供資訊媒合，不經手車資。</div>
+      </details>
+      <details class="faq-item">
+        <summary>配對後怎麼聯絡？</summary>
+        <div class="a">配對成功後系統會主動推播通知，並提供對方 LINE ID，由雙方自行加好友聯絡細節。</div>
+      </details>
+      <details class="faq-item">
+        <summary>sun car 是什麼？</summary>
+        <div class="a">sun car 順咖媒合是台灣唯一的 P2P 共乘 LINE Bot，讓司機和乘客在 LINE 內完成發布行程、自動配對、互相聯絡，完全不用下載 App。</div>
+      </details>
+      <details class="faq-item">
+        <summary>只有台北可以用嗎？</summary>
+        <div class="a">全台皆可，目前北部用戶較多，正在擴展中。南部歡迎加入！</div>
+      </details>
+      <details class="faq-item">
+        <summary>如何回報問題或檢舉？</summary>
+        <div class="a">每張行程卡都有「🚨 檢舉此用戶」按鈕，會通知管理員處理。或寄信至 jun913758@gmail.com。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== CTA BOTTOM ==================== -->
 <div class="cta-bottom">
-  <h2 style="color:#0a5c36;font-size:1.3rem">現在就開始找共乘</h2>
-  <p>加入超過 1,000 位用戶，自動配對同向行程</p>
-  <a class="btn-main" href="https://line.me/R/ti/p/@321nmofi">➕ 加入 LINE Bot</a>
-  <p style="margin-top:12px;font-size:.85rem;color:#888">LINE 搜尋：<strong>sun car 順咖媒合</strong> 或 <strong>@321nmofi</strong></p>
+  <div class="inner">
+    <img class="qr" src="qr-line.png" alt="LINE 加好友 QR Code" />
+    <h2>現在就開始找共乘</h2>
+    <p>加入超過 1,000 位用戶，讓系統幫你自動配對同向行程。</p>
+    <a class="btn btn-primary" href="https://line.me/R/ti/p/@321nmofi">
+      <span style="font-size:18px">＋</span> 加入 LINE Bot
+    </a>
+    <p style="margin-top:16px;font-size:13px;color:var(--ink-3)">LINE 搜尋：<strong style="color:var(--ink-1)">sun car 順咖媒合</strong> 或 <code style="font-family:'JetBrains Mono',monospace;background:#fff;padding:2px 6px;border-radius:4px;border:1px solid var(--line-1)">@321nmofi</code></p>
+
+    <div class="social-divider"><span>也可以在 Facebook 追蹤我們</span></div>
+    <div class="social-row">
+      <a class="social-card" href="https://www.facebook.com/share/1CVwD7keXJ/?mibextid=wwXIfr" target="_blank" rel="noopener">
+        <div class="social-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.51 1.49-3.9 3.78-3.9 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>
+        </div>
+        <div class="social-text">
+          <span class="social-kind">官方粉絲專頁</span>
+          <span class="social-name">sun car 順咖媒合</span>
+        </div>
+        <span class="social-arrow" aria-hidden="true">→</span>
+      </a>
+      <a class="social-card" href="https://www.facebook.com/share/g/1BoEEHjgEf/" target="_blank" rel="noopener">
+        <div class="social-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05A4.93 4.93 0 0 1 17 16.5V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        </div>
+        <div class="social-text">
+          <span class="social-kind">在地共乘社團</span>
+          <span class="social-name">加入社群、找順路車友</span>
+        </div>
+        <span class="social-arrow" aria-hidden="true">→</span>
+      </a>
+    </div>
+  </div>
 </div>
 
+<!-- ==================== FOOTER ==================== -->
 <footer>
-  <p>sun car 順咖媒合 &copy; 2026 ｜ 資訊媒合服務，非汽車運輸業者</p>
-  <p style="margin-top:6px"><a href="mailto:jun913758@gmail.com" style="color:#888">jun913758@gmail.com</a></p>
+  <div class="row">
+    <span>sun car 順咖媒合 © 2026</span>
+    <span class="sep">·</span>
+    <span>資訊媒合服務，非汽車運輸業者</span>
+    <span class="sep">·</span>
+    <a href="mailto:jun913758@gmail.com">jun913758@gmail.com</a>
+    <span class="sep">·</span>
+    <a href="https://www.facebook.com/share/1CVwD7keXJ/?mibextid=wwXIfr" target="_blank" rel="noopener">FB 粉專</a>
+    <span class="sep">·</span>
+    <a href="https://www.facebook.com/share/g/1BoEEHjgEf/" target="_blank" rel="noopener">FB 社團</a>
+  </div>
+  <small>共乘・帶貨・順路媒合，省錢又環保</small>
 </footer>
 
 </body>
