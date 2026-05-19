@@ -702,7 +702,7 @@ def parse_dauding(text):
 def get_dauding_confirm_flex(parsed, uid):
     """Dauding 解析後的確認卡片，讓使用者選時間後一鍵發布"""
     ut = parsed.get("user_type", "driver")
-    main_color = "#00b900" if ut == "driver" else "#1e90ff"
+    main_color = "#4DA873" if ut == "driver" else "#5689B4"
     role_text = "載客/貨（提供座位）" if ut == "driver" else "搭車/寄物（徵求座位）"
     sc = parsed.get("s_city", "")
     ec = parsed.get("e_city", "")
@@ -739,24 +739,24 @@ def get_dauding_confirm_flex(parsed, uid):
             ]},
         "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "身份", "color": "#aaaaaa", "size": "sm", "flex": 2},
-                {"type": "text", "text": role_text, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
+                {"type": "text", "text": "身份", "color": "#7A828B", "size": "sm", "flex": 2},
+                {"type": "text", "text": role_text, "color": "#1A1D21", "size": "sm", "flex": 5, "wrap": True}]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 2},
-                {"type": "text", "text": f"{sc} ➔ {ec}", "color": "#333333", "size": "sm", "flex": 5}]},
+                {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 2},
+                {"type": "text", "text": f"{sc} ➔ {ec}", "color": "#1A1D21", "size": "sm", "flex": 5}]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 2},
-                {"type": "text", "text": time_display, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
+                {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 2},
+                {"type": "text", "text": time_display, "color": "#1A1D21", "size": "sm", "flex": 5, "wrap": True}]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 2},
-                {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 5}]},
+                {"type": "text", "text": "人數", "color": "#7A828B", "size": "sm", "flex": 2},
+                {"type": "text", "text": f"{pc}人", "color": "#1A1D21", "size": "sm", "flex": 5}]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 2},
-                {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
+                {"type": "text", "text": "費用", "color": "#7A828B", "size": "sm", "flex": 2},
+                {"type": "text", "text": fee, "color": "#1A1D21", "size": "sm", "flex": 5, "wrap": True}]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                {"type": "text", "text": "中途", "color": "#aaaaaa", "size": "sm", "flex": 2},
-                {"type": "text", "text": wp_display, "color": "#333333", "size": "sm", "flex": 5, "wrap": True}]},
-            {"type": "text", "text": "⚠️ 系統只比對縣市，精確地點顯示在配對通知供對方參考", "size": "xxs", "color": "#aaaaaa", "margin": "md", "wrap": True}
+                {"type": "text", "text": "中途", "color": "#7A828B", "size": "sm", "flex": 2},
+                {"type": "text", "text": wp_display, "color": "#1A1D21", "size": "sm", "flex": 5, "wrap": True}]},
+            {"type": "text", "text": "⚠️ 系統只比對縣市，精確地點顯示在配對通知供對方參考", "size": "xxs", "color": "#7A828B", "margin": "md", "wrap": True}
         ]},
         "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
             {"type": "button", "style": "primary", "height": "sm", "color": main_color,
@@ -764,7 +764,7 @@ def get_dauding_confirm_flex(parsed, uid):
                         "data": f"action=dauding_publish&parsed={quote(parsed_json, safe='')}",
                         "mode": "datetime",
                         "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}},
-            {"type": "button", "style": "link", "height": "sm", "color": "#999999",
+            {"type": "button", "style": "link", "height": "sm", "color": "#7A828B",
              "action": {"type": "message", "label": "✖ 取消，自行填寫", "text": "我要載客/貨" if ut == "driver" else "我要搭車/寄物"}}
         ]}
     }
@@ -774,7 +774,7 @@ def get_dauding_confirm_flex(parsed, uid):
 # --- 4. Flex 卡片建構 ---
 def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", recur_days=""):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res_data
-    main_color = "#00b900" if ut == 'driver' else "#1e90ff"
+    main_color = "#4DA873" if ut == 'driver' else "#5689B4"
     ps_text = ps.strip().rstrip(",") if ps else "（未選）"
     role_label = "載客/貨" if ut == "driver" else "搭車/寄物"
     share_text = f"【sun car 順咖媒合】{role_label}徵求 🚗\n\n📍 {sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人・費用：{fe}\n\n有要同方向的嗎？加 LINE Bot「sun car 順咖媒合」一起揪行程！"
@@ -783,12 +783,12 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
     extra_rows = []
     if ut == 'driver' and vehicle_type:
         extra_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "車輛", "color": "#aaaaaa", "size": "sm", "flex": 1},
-            {"type": "text", "text": vehicle_type + (f" / {plate_no}" if plate_no else ""), "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+            {"type": "text", "text": "車輛", "color": "#7A828B", "size": "sm", "flex": 1},
+            {"type": "text", "text": vehicle_type + (f" / {plate_no}" if plate_no else ""), "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
         ]})
     if recur_days:
         extra_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "循環", "color": "#aaaaaa", "size": "sm", "flex": 1},
+            {"type": "text", "text": "循環", "color": "#7A828B", "size": "sm", "flex": 1},
             {"type": "text", "text": "🔁 每週 " + _recur_days_label(recur_days), "wrap": True, "color": "#1D9E75", "size": "sm", "flex": 5}
         ]})
 
@@ -798,15 +798,15 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
         }},
         {"type": "button", "style": "link", "height": "sm", "action": {
             "type": "postback", "label": "🔁 修改循環天數", "data": f"action=edit_recur&id={match_id}"
-        }, "color": "#888888"},
+        }, "color": "#7A828B"},
         {"type": "button", "style": "link", "height": "sm", "action": {
             "type": "postback", "label": "❌ 撤回/刪除此行程", "data": f"action=delete&id={match_id}"
-        }, "color": "#ff4b4b"},
+        }, "color": "#C26167"},
         {"type": "separator", "margin": "sm"},
         {"type": "button", "style": "link", "height": "sm", "action": {
             "type": "uri", "label": "☕ 請開發者喝杯咖啡",
             "uri": "https://p.ecpay.com.tw/8C9FE97"
-        }, "color": "#aaaaaa"}
+        }, "color": "#7A828B"}
     ]
 
     bubble = {
@@ -821,22 +821,22 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
           {"type": "text", "text": f"{'🚗 載客模式' if ut=='driver' else '🙋 搭車模式'}", "weight": "bold", "size": "xl", "margin": "md"},
           {"type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-              {"type": "text", "text": tt.replace("T", " "), "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+              {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 1},
+              {"type": "text", "text": tt.replace("T", " "), "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
             ]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-              {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+              {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 1},
+              {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
             ]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "詳情", "color": "#aaaaaa", "size": "sm", "flex": 1},
-              {"type": "text", "text": f"{pc}人 | {fe} | {wy}", "wrap": True, "color": "#666666", "size": "sm", "flex": 5}
+              {"type": "text", "text": "詳情", "color": "#7A828B", "size": "sm", "flex": 1},
+              {"type": "text", "text": f"{pc}人 | {fe} | {wy}", "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
             ]},
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
-              {"type": "text", "text": ps_text, "wrap": True, "color": "#aaaaaa", "size": "xs", "flex": 5}
+              {"type": "text", "text": "標籤", "color": "#7A828B", "size": "sm", "flex": 1},
+              {"type": "text", "text": ps_text, "wrap": True, "color": "#7A828B", "size": "xs", "flex": 5}
             ]},
-            {"type": "text", "text": "＊標籤僅供對方參考，不影響媒合", "size": "xxs", "color": "#cccccc", "margin": "sm", "wrap": True}
+            {"type": "text", "text": "＊標籤僅供對方參考，不影響媒合", "size": "xxs", "color": "#B5BBC2", "margin": "sm", "wrap": True}
           ] + extra_rows}
         ]
       },
@@ -869,7 +869,7 @@ def get_main_cat_menu():
             "header": {
                 "type": "box", "layout": "vertical",
                 "contents": [{"type": "text", "text": title, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
-                "backgroundColor": "#444441"
+                "backgroundColor": "#1A1D21"
             },
             "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": _rows(items)},
             "footer": {"type": "box", "layout": "vertical", "contents": [
@@ -985,7 +985,7 @@ def get_detail_flex(last_count=None, last_fee=None, last_way=None, last_flex=Non
             "type": "box", "layout": "vertical",
             "contents": [{"type": "text", "text": "行程細節（綠色為上次設定）",
                           "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
-            "backgroundColor": "#444441"
+            "backgroundColor": "#1A1D21"
         },
         "body": {
             "type": "box", "layout": "vertical", "spacing": "md",
@@ -1045,7 +1045,7 @@ def _detail_flex_for(uid):
 # --- 免責聲明 Flex 卡片 ---
 def get_terms_flex():
     def _bubble(title, lines, is_last=False):
-        body_contents = [{"type": "text", "text": line, "size": "xs", "color": "#333333", "wrap": True, "margin": "md"} for line in lines]
+        body_contents = [{"type": "text", "text": line, "size": "xs", "color": "#1A1D21", "wrap": True, "margin": "md"} for line in lines]
         bubble = {
             "type": "bubble",
             "header": {"type": "box", "layout": "vertical", "backgroundColor": "#CC0000",
@@ -1056,12 +1056,12 @@ def get_terms_flex():
             bubble["footer"] = {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                 {"type": "button", "style": "primary", "color": "#CC0000", "height": "sm",
                  "action": {"type": "postback", "label": "✅ 我已閱讀並同意使用條款", "data": "action=agree_terms"}},
-                {"type": "text", "text": "點擊同意後即可開始使用服務", "size": "xxs", "color": "#999999", "align": "center"}
+                {"type": "text", "text": "點擊同意後即可開始使用服務", "size": "xxs", "color": "#7A828B", "align": "center"}
             ]}
         return bubble
 
     def _bubble_with_footer(title, lines, footer_contents):
-        body_contents = [{"type": "text", "text": line, "size": "xs", "color": "#333333", "wrap": True, "margin": "md"} for line in lines]
+        body_contents = [{"type": "text", "text": line, "size": "xs", "color": "#1A1D21", "wrap": True, "margin": "md"} for line in lines]
         return {
             "type": "bubble",
             "header": {"type": "box", "layout": "vertical", "backgroundColor": "#CC0000",
@@ -1114,9 +1114,9 @@ def get_terms_flex():
         ], [
             {"type": "button", "style": "primary", "color": "#CC0000", "height": "sm",
              "action": {"type": "postback", "label": "✅ 我已閱讀並同意使用條款", "data": "action=agree_terms"}},
-            {"type": "button", "style": "link", "height": "sm", "color": "#aaaaaa",
+            {"type": "button", "style": "link", "height": "sm", "color": "#7A828B",
              "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}},
-            {"type": "text", "text": "點擊同意後即可開始使用服務", "size": "xxs", "color": "#999999", "align": "center"}
+            {"type": "text", "text": "點擊同意後即可開始使用服務", "size": "xxs", "color": "#7A828B", "align": "center"}
         ])
     ]
     return FlexSendMessage(alt_text="【重要】使用條款與免責聲明（請詳閱後同意）", contents={"type": "carousel", "contents": bubbles})
@@ -1127,7 +1127,7 @@ def get_welcome_flex():
         "type": "bubble",
         "header": {
             "type": "box", "layout": "vertical",
-            "backgroundColor": "#00b900",
+            "backgroundColor": "#4DA873",
             "contents": [
                 {"type": "text", "text": "sun car 順咖媒合", "weight": "bold", "color": "#FFFFFF", "size": "lg"},
                 {"type": "text", "text": "共乘・帶貨・順路媒合，省錢又環保", "color": "#FFFFFFBB", "size": "xs", "margin": "sm"}
@@ -1144,7 +1144,7 @@ def get_welcome_flex():
                     {"type": "text", "text": "4️⃣ 填寫細節後發布，系統自動媒合", "size": "sm", "wrap": True}
                 ]},
                 {"type": "separator"},
-                {"type": "text", "text": "隨時輸入「我的行程」管理已發布行程\n輸入「媒合規則」了解配對邏輯\n輸入「有新配對嗎」查詢未送達通知\n輸入「關閉配對通知」停止主動推播\n輸入「幫助」重新查看本說明\n輸入「回報問題」送出建議或回饋", "size": "xs", "color": "#888888", "wrap": True}
+                {"type": "text", "text": "隨時輸入「我的行程」管理已發布行程\n輸入「媒合規則」了解配對邏輯\n輸入「有新配對嗎」查詢未送達通知\n輸入「關閉配對通知」停止主動推播\n輸入「幫助」重新查看本說明\n輸入「回報問題」送出建議或回饋", "size": "xs", "color": "#7A828B", "wrap": True}
             ]
         },
         "footer": {
@@ -1179,7 +1179,7 @@ def get_rules_flex():
         "type": "bubble",
         "header": {
             "type": "box", "layout": "vertical",
-            "backgroundColor": "#444441",
+            "backgroundColor": "#1A1D21",
             "contents": [
                 {"type": "text", "text": "sun car 順咖媒合", "weight": "bold", "color": "#FFFFFF", "size": "sm"},
                 {"type": "text", "text": "📋 媒合規則說明", "weight": "bold", "color": "#FFFFFFCC", "size": "md", "margin": "xs"}
@@ -1190,32 +1190,32 @@ def get_rules_flex():
             "contents": [
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "🛣️ 中途上下車", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "司機從台北開到台中，你在桃園上車、新竹下車也OK！只要司機開啟「接受中途」，系統就會幫你配到順路的車。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "司機從台北開到台中，你在桃園上車、新竹下車也OK！只要司機開啟「接受中途」，系統就會幫你配到順路的車。", "size": "xs", "color": "#4A5057", "wrap": True}
                 ]},
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "⏰ 時間彈性", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "選 14:00 出發＋願意彈性 → 系統搜尋 10:00~18:00（前後各 4 小時）。選精確時間則只搜前後 1 小時。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "選 14:00 出發＋願意彈性 → 系統搜尋 10:00~18:00（前後各 4 小時）。選精確時間則只搜前後 1 小時。", "size": "xs", "color": "#4A5057", "wrap": True}
                 ]},
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "🧭 方向匹配", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "只配同方向！北→南不會配到南→北。同縣市內依區域分群配對（如台北東區只配東區附近）。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "只配同方向！北→南不會配到南→北。同縣市內依區域分群配對（如台北東區只配東區附近）。", "size": "xs", "color": "#4A5057", "wrap": True}
                 ]},
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "📦 帶貨/寄物", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "發布「載客/貨」行程時可接受順路帶貨委託。費用和物品條件由雙方自行協議，請勿運送違禁品。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "發布「載客/貨」行程時可接受順路帶貨委託。費用和物品條件由雙方自行協議，請勿運送違禁品。", "size": "xs", "color": "#4A5057", "wrap": True}
                 ]},
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "🔔 自動通知＆過期", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "有人發布同向行程，系統主動推播通知雙方。行程依設定天數自動下架（最長 7 天）。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "有人發布同向行程，系統主動推播通知雙方。行程依設定天數自動下架（最長 7 天）。", "size": "xs", "color": "#4A5057", "wrap": True}
                 ]},
                 {"type": "separator"},
                 {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
                     {"type": "text", "text": "⭐ 評分系統", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "行程完成後，配對雙方可互相評分（1~5 顆星）。評分顯示在對方的行程卡片上供其他人參考。", "size": "xs", "color": "#666666", "wrap": True}
+                    {"type": "text", "text": "行程完成後，配對雙方可互相評分（1~5 顆星）。評分顯示在對方的行程卡片上供其他人參考。", "size": "xs", "color": "#4A5057", "wrap": True}
                 ]}
             ]
         },
@@ -1226,7 +1226,7 @@ def get_rules_flex():
                  "action": {"type": "message", "label": "🔍 找所有行程", "text": "找行程"}},
                 {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "📖 回到使用說明", "text": "幫助"}},
-                {"type": "button", "style": "link", "height": "sm", "color": "#aaaaaa",
+                {"type": "button", "style": "link", "height": "sm", "color": "#7A828B",
                  "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}}
             ]
         }
@@ -1235,58 +1235,106 @@ def get_rules_flex():
 
 # --- 被動媒合推播 Flex 卡片 ---
 def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no="", publisher_uid="", community_tag=""):
-    prefs_text = prefs.strip().rstrip(",") if prefs else "（未設定）"
-    contact_contents = [{"type": "text", "text": "有人發布了與您同向的行程！", "size": "xs", "color": "#888888", "align": "center"}]
-    if line_id:
-        contact_contents.append({"type": "button", "style": "primary", "height": "sm", "color": "#00b900", "margin": "sm",
-            "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{line_id}"}})
-    elif publisher_uid:
-        contact_contents.append({"type": "button", "style": "primary", "height": "sm", "color": "#E07B00", "margin": "sm",
-            "action": {"type": "postback", "label": "📨 通知對方留聯絡方式", "data": f"action=contact_req&to={publisher_uid}&route={sc}{sd}→{ec}{ed}"}})
+    COMMUNITY_LABELS = {"keelung_group": "🏘️ 基隆共乘Plus 社友"}
 
-    # 解析 way_point 取上下車地點（格式：接受中途|上車:XXX|下車:YYY）
-    body_contents = [
-        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-            {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
-        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-            {"type": "text", "text": tt.replace("T", " "), "color": "#333333", "size": "sm", "flex": 4}]},
-        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-            {"type": "text", "text": fe, "color": "#333333", "size": "sm", "flex": 4}]},
-        {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
-            {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
+    # --- Hero header ---
+    hero_texts = [
+        {"type": "text", "text": "配對通知 · MATCH FOUND", "size": "xxs", "color": "#D9F0E6", "weight": "bold"},
+        {"type": "text", "text": "有人發布了與你", "weight": "bold", "color": "#FFFFFF", "size": "lg"},
+        {"type": "text", "text": "同向的行程！", "weight": "bold", "color": "#FFFFFF", "size": "lg"}
     ]
-    if vehicle_type:
-        veh_display = vehicle_type + (f" / {plate_no}" if plate_no else "")
-        body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
-            {"type": "text", "text": veh_display, "color": "#333333", "size": "sm", "flex": 4}]})
+    if community_tag and community_tag in COMMUNITY_LABELS:
+        hero_texts.append({"type": "text", "text": COMMUNITY_LABELS[community_tag], "size": "xs", "color": "#d4f5e9", "margin": "xs"})
+
+    # --- Route visualization (dot → line → square) ---
+    # Flex Message approximation: left column = vertical pin indicators as chars, right = city/dist text
+    route_pin = {"type": "box", "layout": "vertical", "width": "14px", "spacing": "none", "contents": [
+        {"type": "text", "text": "●", "color": "#4DA873", "size": "xxs", "align": "center"},
+        {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
+        {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
+        {"type": "text", "text": "■", "color": "#1A1D21", "size": "xxs", "align": "center"},
+    ]}
+    route_text = {"type": "box", "layout": "vertical", "flex": 1, "spacing": "none", "contents": [
+        {"type": "text", "text": sc, "size": "xxs", "color": "#7A828B"},
+        {"type": "text", "text": sd, "size": "sm", "color": "#1A1D21", "weight": "bold"},
+        {"type": "text", "text": ec, "size": "xxs", "color": "#7A828B", "margin": "sm"},
+        {"type": "text", "text": ed, "size": "sm", "color": "#1A1D21", "weight": "bold"},
+    ]}
+    route_box = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "md", "contents": [route_pin, route_text]}
+
+    # --- 2×2 meta grid ---
+    time_display = tt.replace("T", " ")[5:16] if len(tt) >= 16 else tt.replace("T", " ")
+    veh_display = vehicle_type + (f"/{plate_no}" if plate_no else "") if vehicle_type else "未設定"
+    meta_row1 = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
+        {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA", "cornerRadius": "10px",
+         "paddingAll": "8px", "contents": [
+            {"type": "text", "text": "出發時間", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+            {"type": "text", "text": time_display, "size": "sm", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+        {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA", "cornerRadius": "10px",
+         "paddingAll": "8px", "contents": [
+            {"type": "text", "text": "費用", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+            {"type": "text", "text": fe, "size": "sm", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+    ]}
+    meta_row2 = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
+        {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA", "cornerRadius": "10px",
+         "paddingAll": "8px", "contents": [
+            {"type": "text", "text": "座位", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+            {"type": "text", "text": f"{pc}人", "size": "sm", "color": "#1A1D21", "weight": "bold"}]},
+        {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA", "cornerRadius": "10px",
+         "paddingAll": "8px", "contents": [
+            {"type": "text", "text": "車型", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+            {"type": "text", "text": veh_display, "size": "sm", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+    ]}
+
+    body_contents = [route_box, meta_row1, meta_row2]
+
+    # --- waypoint extras ---
     if way_point:
         wp_parts = way_point.split("|")
-        for part in wp_parts[1:]:  # 跳過第一段「接受中途/僅限起迄」
+        for part in wp_parts[1:]:
             if ":" in part:
                 label, val = part.split(":", 1)
-                body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                    {"type": "text", "text": label, "color": "#aaaaaa", "size": "sm", "flex": 1},
-                    {"type": "text", "text": val, "color": "#555555", "size": "sm", "flex": 4, "wrap": True}]})
-    body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-        {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
-        {"type": "text", "text": prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]})
+                body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "margin": "sm", "contents": [
+                    {"type": "text", "text": label, "color": "#7A828B", "size": "sm", "flex": 1},
+                    {"type": "text", "text": val, "color": "#4A5057", "size": "sm", "flex": 4, "wrap": True}]})
 
-    COMMUNITY_LABELS = {"keelung_group": "🏘️ 基隆共乘Plus 社友"}
-    header_contents = [{"type": "text", "text": "🔔 新的順路配對！", "weight": "bold", "color": "#FFFFFF", "size": "sm"}]
-    if community_tag and community_tag in COMMUNITY_LABELS:
-        header_contents.append({"type": "text", "text": COMMUNITY_LABELS[community_tag], "size": "xs", "color": "#d4f5e9"})
+    # --- prefs tags ---
+    if prefs:
+        tag_texts = [t.strip() for t in prefs.strip().rstrip(",").split(",") if t.strip()]
+        if tag_texts:
+            tag_contents = []
+            for tag in tag_texts[:6]:
+                tag_contents.append({"type": "box", "layout": "vertical",
+                    "backgroundColor": "#EEF1F4", "cornerRadius": "999px",
+                    "paddingStart": "8px", "paddingEnd": "8px", "paddingTop": "3px", "paddingBottom": "3px",
+                    "contents": [{"type": "text", "text": tag, "size": "xxs", "color": "#4A5057"}]})
+            body_contents.append({"type": "box", "layout": "horizontal", "wrap": True,
+                "spacing": "sm", "margin": "sm", "contents": tag_contents})
+
+    # --- footer CTA ---
+    if line_id:
+        cta = {"type": "button", "style": "primary", "height": "sm", "color": "#4DA873",
+            "action": {"type": "uri", "label": "💬 加 LINE 聯絡對方", "uri": f"https://line.me/ti/p/~{line_id}"}}
+    elif publisher_uid:
+        cta = {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
+            "action": {"type": "postback", "label": "📨 通知對方留聯絡方式", "data": f"action=contact_req&to={publisher_uid}&route={sc}{sd}→{ec}{ed}"}}
+    else:
+        cta = None
+
+    footer_contents = []
+    if cta:
+        footer_contents.append(cta)
+    footer_contents.append({"type": "text", "text": "點擊後雙方都會收到提醒", "size": "xxs", "color": "#7A828B", "align": "center", "margin": "sm"})
+
     bubble = {
         "type": "bubble",
-        "header": {"type": "box", "layout": "vertical",
-            "contents": header_contents,
-            "backgroundColor": "#1D9E75"},
-        "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_contents},
-        "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": contact_contents}
+        "header": {"type": "box", "layout": "vertical", "paddingAll": "16px",
+            "backgroundColor": "#C97D33",
+            "contents": hero_texts},
+        "body": {"type": "box", "layout": "vertical", "paddingAll": "16px", "contents": body_contents},
+        "footer": {"type": "box", "layout": "vertical", "paddingAll": "12px",
+            "backgroundColor": "#F7F8FA",
+            "contents": footer_contents}
     }
     return FlexSendMessage(alt_text="🔔 新的順路配對！", contents=bubble)
 
@@ -1364,32 +1412,32 @@ def do_publish(uid, reply_token):
                     "backgroundColor": "#1D9E75"},
                 "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": m[1][5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": m[1][5:16], "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{m[2]}{m[3]} ➔ {m[4]}{m[5]}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                        {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{m[2]}{m[3]} ➔ {m[4]}{m[5]}", "color": "#1A1D21", "size": "sm", "flex": 4, "wrap": True}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": m[6], "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "費用", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": m[6], "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{m[8]}人", "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "人數", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{m[8]}人", "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "評分", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": rating_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "標籤", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": m_prefs_text, "color": "#999999", "size": "xs", "flex": 4, "wrap": True}]},
+                        {"type": "text", "text": "標籤", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": m_prefs_text, "color": "#7A828B", "size": "xs", "flex": 4, "wrap": True}]},
                 ] + ([{"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": (m[12] + (f" / {m[13]}" if len(m) > 13 and m[13] else "")), "color": "#333333", "size": "sm", "flex": 4}]}]
+                        {"type": "text", "text": "車型", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": (m[12] + (f" / {m[13]}" if len(m) > 13 and m[13] else "")), "color": "#1A1D21", "size": "sm", "flex": 4}]}]
                     if len(m) > 12 and m[12] else [])},
                 "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                     contact_btn,
                     {"type": "button", "style": "link", "height": "sm",
                      "action": {"type": "uri", "label": "☕ 支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"},
-                     "color": "#aaaaaa"}
+                     "color": "#7A828B"}
                 ]}
             })
             # 儲存配對關係
@@ -1716,7 +1764,7 @@ def admin_panel():
         )).fetchall()
         conn.close()
 
-        status_color = {'active':'#1D9E75','expired':'#999','completed':'#1e90ff','cancelled':'#cc0000'}
+        status_color = {'active':'#1D9E75','expired':'#999','completed':'#5689B4','cancelled':'#cc0000'}
 
         trip_rows = ""
         for t in trips:
@@ -1907,7 +1955,7 @@ def admin_community():
 
         conn.close()
 
-        status_color = {'active': '#1D9E75', 'expired': '#999', 'completed': '#1e90ff', 'cancelled': '#cc0000'}
+        status_color = {'active': '#1D9E75', 'expired': '#999', 'completed': '#5689B4', 'cancelled': '#cc0000'}
         rows = ""
         for (uid,) in users:
             trips = trips_by_user.get(uid, [])
@@ -1930,7 +1978,7 @@ def admin_community():
                 f"<td style='font-size:12px'>{join_time}</td>"
                 f"<td style='text-align:center'>{total}</td>"
                 f"<td style='text-align:center;color:#1D9E75;font-weight:bold'>{active}</td>"
-                f"<td style='text-align:center;color:#1e90ff'>{pairs_cnt}</td>"
+                f"<td style='text-align:center;color:#5689B4'>{pairs_cnt}</td>"
                 f"<td style='font-size:12px'>{latest_cell}</td>"
                 f"</tr>"
             )
@@ -2583,43 +2631,43 @@ def handle_message(event):
                 finally:
                     pair_conn.close()
                 role = ("🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物") + (" ⚠️ 已過期" if is_expired else "")
-                hdr_color = "#999999" if is_expired else ("#1D9E75" if utype == 'driver' else "#1e90ff")
+                hdr_color = "#7A828B" if is_expired else ("#1D9E75" if utype == 'driver' else "#5689B4")
                 lid_text = f"@{lid}" if lid else "未設定"
                 vc_text = f"{vc or 0} 次"
                 exp_text = str(exp_at)[5:16] if exp_at else "未知"
                 time_text = t_info[5:16] + (" 起" if is_recur else "")
                 body_items = [
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                        {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#1A1D21", "size": "sm", "flex": 4, "wrap": True}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": time_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": time_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": fee or "未設定", "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "費用", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": fee or "未設定", "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "LINE ID", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": lid_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "LINE ID", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": lid_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "瀏覽", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": vc_text, "color": "#888888", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "瀏覽", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": vc_text, "color": "#7A828B", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "配對", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{pair_cnt} 次", "color": "#1D9E75" if pair_cnt > 0 else "#888888", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "配對", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{pair_cnt} 次", "color": "#1D9E75" if pair_cnt > 0 else "#7A828B", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": "下架", "color": "#7A828B", "size": "sm", "flex": 1},
                         {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]},
                 ]
                 if is_recur and recur_wd:
                     body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "循環", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": "循環", "color": "#7A828B", "size": "sm", "flex": 1},
                         {"type": "text", "text": "🔁 每週 " + _recur_days_label(recur_wd), "color": "#1D9E75", "size": "sm", "flex": 4}]})
                 if vtype:
                     veh_display = vtype + (f" / {pno}" if pno else "")
                     body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": veh_display, "color": "#333333", "size": "sm", "flex": 4}]})
+                        {"type": "text", "text": "車型", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": veh_display, "color": "#1A1D21", "size": "sm", "flex": 4}]})
                 notify_label = "🔕 關閉配對通知" if notify_on else "🔔 開啟配對通知"
                 notify_text = "關閉配對通知" if notify_on else "開啟配對通知"
                 extra_btns = []
@@ -2652,9 +2700,9 @@ def handle_message(event):
                                         "data": f"action=edit_time&id={m_id}",
                                         "mode": "datetime",
                                         "min": datetime.now().strftime("%Y-%m-%dT%H:%M")}},
-                            {"type": "button", "style": "secondary", "height": "sm", "color": "#ff4b4b",
+                            {"type": "button", "style": "secondary", "height": "sm", "color": "#C26167",
                              "action": {"type": "postback", "label": "🗑️ 刪除行程", "data": f"action=delete&id={m_id}"}},
-                            {"type": "button", "style": "link", "height": "sm", "color": "#888888",
+                            {"type": "button", "style": "link", "height": "sm", "color": "#7A828B",
                              "action": {"type": "message", "label": notify_label, "text": notify_text}},
                         ] + extra_btns
                     )}
@@ -2758,7 +2806,7 @@ def handle_message(event):
             "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                 {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                  "action": {"type": "message", "label": "🚗 找司機（我要搭車）", "text": "找類型:driver"}},
-                {"type": "button", "style": "primary", "height": "sm", "color": "#1e90ff",
+                {"type": "button", "style": "primary", "height": "sm", "color": "#5689B4",
                  "action": {"type": "message", "label": "🙋 找乘客（我要載人）", "text": "找類型:seeker"}},
                 {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "📋 全部行程", "text": "找類型:all"}}
@@ -2779,7 +2827,7 @@ def handle_message(event):
         title = label_map.get(ftype, "找行程")
         bubble = {
             "type": "bubble",
-            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#444441",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#1A1D21",
                 "contents": [{"type": "text", "text": f"📍 {title} — 選擇區域", "weight": "bold", "color": "#FFFFFF", "size": "sm"}]},
             "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
                 {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
@@ -2821,7 +2869,7 @@ def handle_message(event):
                     "action": {"type": "message", "label": pair[0], "text": f"找縣市:{ftype}:{tfilter}:{pair[0]}"}})
         bubble = {
             "type": "bubble",
-            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#444441",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#1A1D21",
                 "contents": [{"type": "text", "text": f"🗺️ {area} — 選擇縣市", "weight": "bold", "color": "#FFFFFF", "size": "sm"}]},
             "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": rows}
         }
@@ -2921,7 +2969,7 @@ def handle_message(event):
                 rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
                 icon = "🚗" if utype == 'driver' else "🙋"
                 role = "司機" if utype == 'driver' else "乘客"
-                hdr_color = "#1D9E75" if utype == 'driver' else "#1e90ff"
+                hdr_color = "#1D9E75" if utype == 'driver' else "#5689B4"
                 is_own = (owner_uid == uid)
                 if is_own:
                     footer_contents = [
@@ -2938,7 +2986,7 @@ def handle_message(event):
                     footer_contents = [
                         {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
                          "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}},
-                        {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
+                        {"type": "button", "style": "link", "height": "sm", "color": "#C26167",
                          "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
                     ]
                 else:
@@ -2946,37 +2994,37 @@ def handle_message(event):
                         {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
                          "action": {"type": "postback", "label": "📨 通知對方留聯絡方式",
                                     "data": f"action=contact_req&to={owner_uid}&route={sc}{sd}→{ec}{ed}"}},
-                        {"type": "button", "style": "link", "height": "sm", "color": "#ff4b4b",
+                        {"type": "button", "style": "link", "height": "sm", "color": "#C26167",
                          "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
                     ]
                 exp_text = str(exp_at)[5:16] if exp_at else "未知"
                 body_rows = [
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "路線", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#333333", "size": "sm", "flex": 4, "wrap": True}]},
+                        {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#1A1D21", "size": "sm", "flex": 4, "wrap": True}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "時間", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": tinfo[5:16], "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": tinfo[5:16], "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "費用", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": fee, "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "費用", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": fee, "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "人數", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{pc}人", "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "人數", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": f"{pc}人", "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "評分", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": rating_text, "color": "#333333", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": "評分", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": rating_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "下架", "color": "#aaaaaa", "size": "sm", "flex": 1},
+                        {"type": "text", "text": "下架", "color": "#7A828B", "size": "sm", "flex": 1},
                         {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]}
                 ]
                 if vtype:
                     veh_display = vtype + (f" / {pno}" if pno else "")
                     body_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "車型", "color": "#aaaaaa", "size": "sm", "flex": 1},
-                        {"type": "text", "text": veh_display, "color": "#333333", "size": "sm", "flex": 4}]})
+                        {"type": "text", "text": "車型", "color": "#7A828B", "size": "sm", "flex": 1},
+                        {"type": "text", "text": veh_display, "color": "#1A1D21", "size": "sm", "flex": 4}]})
                 if is_own:
-                    body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#aaaaaa", "align": "end"})
+                    body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#7A828B", "align": "end"})
                 bubbles.append({
                     "type": "bubble",
                     "header": {"type": "box", "layout": "vertical",
