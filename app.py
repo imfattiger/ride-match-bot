@@ -780,18 +780,6 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
     share_text = f"【sun car 順咖媒合】{role_label}徵求 🚗\n\n📍 {sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人・費用：{fe}\n\n有要同方向的嗎？加 LINE Bot「sun car 順咖媒合」一起揪行程！"
     share_url = f"https://line.me/R/msg/text/?{quote(share_text)}"
 
-    extra_rows = []
-    if ut == 'driver' and vehicle_type:
-        extra_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "車輛", "color": "#7A828B", "size": "sm", "flex": 1},
-            {"type": "text", "text": vehicle_type + (f" / {plate_no}" if plate_no else ""), "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
-        ]})
-    if recur_days:
-        extra_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-            {"type": "text", "text": "循環", "color": "#7A828B", "size": "sm", "flex": 1},
-            {"type": "text", "text": "🔁 每週 " + _recur_days_label(recur_days), "wrap": True, "color": "#1D9E75", "size": "sm", "flex": 5}
-        ]})
-
     footer_btns = [
         {"type": "button", "style": "primary", "height": "sm", "color": "#42659a", "action": {
             "type": "uri", "label": "📤 分享行程給朋友", "uri": share_url
@@ -809,36 +797,67 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
         }, "color": "#7A828B"}
     ]
 
+    def _icon_row(icon, icon_bg, icon_color, value_text, meta_text=None):
+        contents = [
+            {"type": "box", "layout": "vertical", "width": "28px", "height": "28px",
+             "cornerRadius": "8px", "backgroundColor": icon_bg,
+             "justifyContent": "center", "alignItems": "center",
+             "contents": [{"type": "text", "text": icon, "size": "sm", "align": "center", "color": icon_color}]},
+            {"type": "text", "text": value_text, "size": "sm", "color": "#1A1D21",
+             "weight": "bold", "flex": 1, "wrap": True, "gravity": "center"},
+        ]
+        if meta_text:
+            contents.append({"type": "text", "text": meta_text, "size": "xxs",
+                              "color": "#7A828B", "align": "end", "gravity": "center"})
+        return {"type": "box", "layout": "horizontal", "spacing": "md",
+                "alignItems": "center", "contents": contents}
+
+    flex_label = "±4小時彈性" if fx == "願意彈性" else "精確時間"
+    wy_short = wy.split("|")[0] if wy else "接受中途"
+
+    icon_rows = [
+        _icon_row("📍", "#EAF3EE" if ut=="driver" else "#ECF1F6",
+                  "#3F8C5F" if ut=="driver" else "#436F94",
+                  f"{sc}{sd} → {ec}{ed}"),
+        _icon_row("🕒", "#EAF3EE" if ut=="driver" else "#ECF1F6",
+                  "#3F8C5F" if ut=="driver" else "#436F94",
+                  tt.replace("T", " "), flex_label),
+        _icon_row("💵", "#FFF5E6", "#C27A2A",
+                  fe, f"{pc}人"),
+        _icon_row("🛣️", "#F4F2EE", "#5A6068", wy_short),
+    ]
+    if ut == "driver" and vehicle_type:
+        veh_text = vehicle_type + (f" {plate_no}" if plate_no else "")
+        icon_rows.append(_icon_row("🚙", "#ECF1F6", "#436F94", veh_text))
+    if recur_days:
+        icon_rows.append(_icon_row("🔁", "#EAF3EE", "#3F8C5F",
+                                   "每週 " + _recur_days_label(recur_days)))
+    if ps_text != "（未選）":
+        icon_rows.append(_icon_row("🏷️", "#F4F2EE", "#5A6068", ps_text))
+
     bubble = {
       "type": "bubble",
       "header": {
-        "type": "box", "layout": "vertical", "contents": [
-          {"type": "text", "text": "✨ 行程發布成功", "weight": "bold", "color": "#FFFFFF", "size": "sm"}
-        ], "backgroundColor": main_color
+        "type": "box", "layout": "horizontal", "paddingAll": "14px",
+        "backgroundColor": main_color, "spacing": "md", "alignItems": "center",
+        "contents": [
+            {"type": "box", "layout": "vertical", "width": "36px", "height": "36px",
+             "cornerRadius": "10px", "backgroundColor": "#5BBF7E" if ut=="driver" else "#6A9EC4",
+             "justifyContent": "center", "alignItems": "center",
+             "contents": [{"type": "text", "text": "🚗" if ut=="driver" else "🙋",
+                           "size": "lg", "align": "center"}]},
+            {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+                {"type": "text", "text": "行程發布成功",
+                 "weight": "bold", "color": "#FFFFFF", "size": "sm"},
+                {"type": "text", "text": "載客／貨模式" if ut=="driver" else "搭車／寄物模式",
+                 "size": "xxs", "color": "#E8F5EE" if ut=="driver" else "#E3EEF6"},
+            ]},
+            {"type": "text", "text": "✨", "size": "xl", "align": "end", "gravity": "center"},
+        ]
       },
       "body": {
-        "type": "box", "layout": "vertical", "contents": [
-          {"type": "text", "text": f"{'🚗 載客模式' if ut=='driver' else '🙋 搭車模式'}", "weight": "bold", "size": "xl", "margin": "md"},
-          {"type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 1},
-              {"type": "text", "text": tt.replace("T", " "), "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
-            ]},
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 1},
-              {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
-            ]},
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "詳情", "color": "#7A828B", "size": "sm", "flex": 1},
-              {"type": "text", "text": f"{pc}人 | {fe} | {wy}", "wrap": True, "color": "#4A5057", "size": "sm", "flex": 5}
-            ]},
-            {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-              {"type": "text", "text": "標籤", "color": "#7A828B", "size": "sm", "flex": 1},
-              {"type": "text", "text": ps_text, "wrap": True, "color": "#7A828B", "size": "xs", "flex": 5}
-            ]},
-            {"type": "text", "text": "＊標籤僅供對方參考，不影響媒合", "size": "xxs", "color": "#B5BBC2", "margin": "sm", "wrap": True}
-          ] + extra_rows}
-        ]
+        "type": "box", "layout": "vertical", "paddingAll": "14px", "spacing": "sm",
+        "contents": icon_rows
       },
       "footer": {
         "type": "box", "layout": "vertical", "spacing": "sm", "contents": footer_btns
@@ -1197,54 +1216,68 @@ def get_welcome_flex():
 
 # --- 媒合規則 Flex 卡片（Item 4）---
 def get_rules_flex():
+    def _rule(icon, bg, color, title, desc):
+        return {"type": "box", "layout": "horizontal", "spacing": "md", "alignItems": "flex-start",
+                "paddingTop": "8px", "paddingBottom": "8px", "contents": [
+                    {"type": "box", "layout": "vertical", "width": "32px", "height": "32px",
+                     "cornerRadius": "9px", "backgroundColor": bg, "justifyContent": "center",
+                     "alignItems": "center", "contents": [
+                         {"type": "text", "text": icon, "size": "sm", "align": "center", "color": color}]},
+                    {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+                        {"type": "text", "text": title, "size": "sm", "color": "#1A1D21",
+                         "weight": "bold"},
+                        {"type": "text", "text": desc, "size": "xxs", "color": "#7A828B",
+                         "wrap": True, "margin": "xs"}
+                    ]}
+                ]}
+
+    rules = [
+        ("🛣️", "#EAF3EE", "#3F8C5F", "中途上下車",
+         "司機開台北→台中，你在桃園上、新竹下也OK！司機開啟「接受中途」系統自動媒合。"),
+        ("⏰", "#ECF1F6", "#436F94", "時間彈性",
+         "彈性模式搜尋前後 ±4 小時；精確模式只搜 ±1 小時。"),
+        ("🧭", "#EAF3EE", "#3F8C5F", "方向匹配",
+         "只配同方向，北→南不配南→北。同縣市內依區域分群配對。"),
+        ("📦", "#FFF5E6", "#C27A2A", "帶貨／寄物",
+         "司機可接受順路帶貨委託，費用條件雙方協議，請勿運送違禁品。"),
+        ("🔔", "#F5EEF8", "#7B5EA7", "自動通知 ＆ 過期",
+         "有人發布同向行程，系統主動推播通知雙方。行程依設定自動下架（最長 7 天）。"),
+        ("⭐", "#FFF5E6", "#C27A2A", "評分系統",
+         "行程完成後雙方可互評 1~5 顆星，評分顯示在行程卡片上。"),
+    ]
+
+    body_contents = []
+    for i, (icon, bg, color, title, desc) in enumerate(rules):
+        body_contents.append(_rule(icon, bg, color, title, desc))
+        if i < len(rules) - 1:
+            body_contents.append({"type": "separator"})
+
     bubble = {
         "type": "bubble",
         "header": {
-            "type": "box", "layout": "vertical",
-            "backgroundColor": "#1A1D21",
+            "type": "box", "layout": "horizontal", "paddingAll": "14px",
+            "backgroundColor": "#1A1D21", "spacing": "md", "alignItems": "center",
             "contents": [
-                {"type": "text", "text": "sun car 順咖媒合", "weight": "bold", "color": "#FFFFFF", "size": "sm"},
-                {"type": "text", "text": "📋 媒合規則說明", "weight": "bold", "color": "#FFFFFFCC", "size": "md", "margin": "xs"}
+                {"type": "box", "layout": "vertical", "width": "36px", "height": "36px",
+                 "cornerRadius": "10px", "backgroundColor": "#2E3237",
+                 "justifyContent": "center", "alignItems": "center",
+                 "contents": [{"type": "text", "text": "📋", "size": "lg", "align": "center"}]},
+                {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+                    {"type": "text", "text": "媒合規則說明",
+                     "weight": "bold", "color": "#FFFFFF", "size": "sm"},
+                    {"type": "text", "text": "SUN CAR 順咖媒合",
+                     "size": "xxs", "color": "#8A9097"},
+                ]},
             ]
         },
         "body": {
-            "type": "box", "layout": "vertical", "spacing": "lg",
-            "contents": [
-                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
-                    {"type": "text", "text": "🛣️ 中途上下車", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "司機從台北開到台中，你在桃園上車、新竹下車也OK！只要司機開啟「接受中途」，系統就會幫你配到順路的車。", "size": "xs", "color": "#4A5057", "wrap": True}
-                ]},
-                {"type": "separator"},
-                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
-                    {"type": "text", "text": "⏰ 時間彈性", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "選 14:00 出發＋願意彈性 → 系統搜尋 10:00~18:00（前後各 4 小時）。選精確時間則只搜前後 1 小時。", "size": "xs", "color": "#4A5057", "wrap": True}
-                ]},
-                {"type": "separator"},
-                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
-                    {"type": "text", "text": "🧭 方向匹配", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "只配同方向！北→南不會配到南→北。同縣市內依區域分群配對（如台北東區只配東區附近）。", "size": "xs", "color": "#4A5057", "wrap": True}
-                ]},
-                {"type": "separator"},
-                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
-                    {"type": "text", "text": "📦 帶貨/寄物", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "發布「載客/貨」行程時可接受順路帶貨委託。費用和物品條件由雙方自行協議，請勿運送違禁品。", "size": "xs", "color": "#4A5057", "wrap": True}
-                ]},
-                {"type": "separator"},
-                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
-                    {"type": "text", "text": "🔔 自動通知＆過期", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "有人發布同向行程，系統主動推播通知雙方。行程依設定天數自動下架（最長 7 天）。", "size": "xs", "color": "#4A5057", "wrap": True}
-                ]},
-                {"type": "separator"},
-                {"type": "box", "layout": "vertical", "spacing": "xs", "contents": [
-                    {"type": "text", "text": "⭐ 評分系統", "weight": "bold", "size": "sm"},
-                    {"type": "text", "text": "行程完成後，配對雙方可互相評分（1~5 顆星）。評分顯示在對方的行程卡片上供其他人參考。", "size": "xs", "color": "#4A5057", "wrap": True}
-                ]}
-            ]
+            "type": "box", "layout": "vertical", "paddingAll": "14px",
+            "contents": body_contents
         },
         "footer": {
-            "type": "box", "layout": "vertical", "spacing": "sm",
+            "type": "box", "layout": "vertical", "spacing": "sm", "paddingAll": "12px",
             "contents": [
-                {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                {"type": "button", "style": "primary", "height": "sm", "color": "#4DA873",
                  "action": {"type": "message", "label": "🔍 找所有行程", "text": "找行程"}},
                 {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "📖 回到使用說明", "text": "幫助"}},
@@ -2265,7 +2298,7 @@ def handle_postback(event):
                 conn.commit()
             finally:
                 conn.close()
-            safe_reply(event.reply_token, TextSendMessage(text=f"🗑️ 已成功刪除行程 (編號: {match_id})"))
+            safe_reply(event.reply_token, TextSendMessage(text=f"🗑️ 行程已刪除。\n\n需要重新發布可隨時輸入「我要載客/貨」或「我要搭車/寄物」。"))
 
         elif data.startswith("action=complete"):
             params = dict(parse_qsl(data))
@@ -2298,16 +2331,16 @@ def handle_postback(event):
                         )) for i in range(1, 6)
                     ])
                 safe_reply(event.reply_token, TextSendMessage(
-                    text="🎉 行程完成！請為配對對象評分：",
+                    text="🎉 行程完成！\n\n旅途愉快，請花一秒為配對對象評個分吧 ⭐",
                     quick_reply=_rate_qr(partner_uid, partner_mid)
                 ))
                 if is_notify_enabled(partner_uid):
                     safe_push(partner_uid, TextSendMessage(
-                        text="🔔 你的配對行程已完成！請為對方評分：",
+                        text="🔔 你的行程已被標記完成！\n\n請花一秒為對方評個分吧 ⭐",
                         quick_reply=_rate_qr(uid, my_mid)
                     ))
             else:
-                safe_reply(event.reply_token, TextSendMessage(text="🎉 行程已標記完成！"))
+                safe_reply(event.reply_token, TextSendMessage(text="🎉 行程已標記完成！旅途愉快 🙏"))
 
         elif data.startswith("action=rate"):
             params = dict(parse_qsl(data))
@@ -2340,7 +2373,12 @@ def handle_postback(event):
                 conn.commit()
             finally:
                 conn.close()
-            safe_reply(event.reply_token, TextSendMessage(text=f"感謝評價！你給了 {'⭐' * int(score)}"))
+            stars = "⭐" * int(score)
+            msg_map = {"1": "感謝回饋，希望下次更順利 🙏", "2": "感謝回饋，我們會繼續努力 🙏",
+                       "3": "感謝評價！", "4": "感謝好評，很高興幫到你 😊", "5": "感謝五星好評！🎉"}
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"{stars}\n\n{msg_map.get(str(score), '感謝評價！')}"
+            ))
 
         elif data.startswith("action=cancel"):
             params = dict(parse_qsl(data))
@@ -2700,7 +2738,7 @@ def handle_message(event):
             conn.close()
 
         if not my_matches:
-            safe_reply(event.reply_token, TextSendMessage(text="📭 您目前沒有生效中的行程。"))
+            safe_reply(event.reply_token, TextSendMessage(text="📭 目前沒有生效中的行程。\n\n輸入「我要載客/貨」或「我要搭車/寄物」來發布新行程！"))
         else:
             bubbles = []
             for m in my_matches:
@@ -3236,7 +3274,8 @@ def handle_message(event):
         if has_next:
             page_items.append(QuickReplyButton(action=MessageAction(label="下一頁 ▶", text=f"找縣市:{ftype}:{tfilter}:{city}:{sort}:{dir_filter}:{pg + 1}")))
         paged_qr = QuickReply(items=page_items + qr_items) if page_items else filter_qr
-        header_text = f"📋 {city} 行程（{time_hint}・{sort_hint}・{dir_hint}{('・' + page_label) if page_label else ''}・{len(rows)} 筆）"
+        type_hint = {"driver": "🚗 司機", "seeker": "🙋 乘客"}.get(ftype, "🔍 全部")
+        header_text = f"📋 {city} · {type_hint}行程\n{time_hint} · {dir_hint} · {sort_hint}{(' · ' + page_label) if page_label else ''}\n共 {len(rows)} 筆{'，還有更多 ▶' if has_next else ''}"
         safe_reply(event.reply_token, [
             TextSendMessage(text=header_text),
             FlexSendMessage(alt_text=f"{city} 附近行程", contents={"type": "carousel", "contents": bubbles}, quick_reply=paged_qr)
@@ -3548,7 +3587,10 @@ def handle_message(event):
                 conn3.commit()
             finally:
                 conn3.close()
-            safe_reply(event.reply_token, TextSendMessage(text=f"✅ 行程細節已更新\n\n人數：{pc}人\n費用：{fe}\n中途：{way}\n時間彈性：{'±4小時' if flex_val == '願意彈性' else '精確時間'}"))
+            flex_display = "±4小時彈性" if flex_val == "願意彈性" else "精確時間"
+            safe_reply(event.reply_token, TextSendMessage(
+                text=f"✅ 行程細節已更新\n\n👤 人數：{pc}人\n💵 費用：{fe}\n🛣️ 中途：{way}\n⏰ 時間彈性：{flex_display}"
+            ))
             return
 
         if True:
