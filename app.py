@@ -2091,47 +2091,87 @@ def admin_low_ratings():
         return "<h3>401 Unauthorized</h3>", 401
     try:
         conn = get_db()
-        rows = conn.execute(q(
+        ratings = conn.execute(q(
             "SELECT rater_id, ratee_id, score, match_id, created_at FROM ratings WHERE score <= 2 ORDER BY created_at DESC"
         )).fetchall()
         blocked = set(r[0] for r in conn.execute(q("SELECT user_id FROM blocked_users")).fetchall())
+
+        # 拉所有相關行程（評分者 + 被評者 各自的行程）
+        all_uids = list(set([r[0] for r in ratings] + [r[1] for r in ratings]))
+        trips_by_uid = {}
+        if all_uids:
+            ph = ','.join(['%s' if USE_PG else '?'] * len(all_uids))
+            trip_rows = conn.execute(
+                f"SELECT user_id, id, user_type, s_city, s_dist, e_city, e_dist, time_info, fee, detail FROM matches WHERE user_id IN ({ph}) ORDER BY created_at DESC",
+                all_uids
+            ).fetchall()
+            for row in trip_rows:
+                trips_by_uid.setdefault(row[0], []).append(row[1:])
         conn.close()
+
         token = request.args.get('token', '')
+
+        def trip_summary(uid):
+            trips = trips_by_uid.get(uid, [])
+            if not trips:
+                return '<span style="color:#aaa">無行程紀錄</span>'
+            t = trips[0]  # 最新一筆
+            tid, utype, sc, sd, ec, ed, tinfo, fee, detail = t
+            icon = '🚗' if utype == 'driver' else '🙋'
+            fee_str = f' 費用:{fee}' if fee else ''
+            detail_str = f'<br><small style="color:#888">{str(detail)[:60]}</small>' if detail else ''
+            return f'{icon} {sc}{sd}→{ec}{ed}<br><small>{str(tinfo)[5:16]}{fee_str}</small>{detail_str}'
+
         trs = ""
-        for rater, ratee, score, mid, cat in rows:
+        for rater, ratee, score, mid, cat in ratings:
             stars = '⭐' * score
-            rater_blocked = '🚫' if rater in blocked else ''
-            ratee_blocked = '🚫' if ratee in blocked else ''
+            rater_blocked = ' 🚫' if rater in blocked else ''
+            ratee_blocked = ' 🚫' if ratee in blocked else ''
+            can_contact = rater not in blocked
+            contact_btn = (
+                f"<a href='https://line.me/R/ti/p/{rater}' target='_blank' "
+                f"style='background:#c0392b;color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;text-decoration:none'>問評分者</a>"
+                if can_contact else '<span style="color:#aaa;font-size:12px">已封鎖</span>'
+            )
             trs += (
                 f"<tr>"
-                f"<td style='font-family:monospace;font-size:12px'>{rater}{rater_blocked}</td>"
-                f"<td style='font-family:monospace;font-size:12px'>{ratee}{ratee_blocked}</td>"
-                f"<td>{stars}({score})</td>"
-                f"<td>{mid}</td>"
-                f"<td style='font-size:12px'>{str(cat)[:16]}</td>"
-                f"<td><a href='https://line.me/R/ti/p/{ratee}' target='_blank' style='color:#2c7a4b'>聯絡被評者</a></td>"
+                f"<td style='font-size:11px'>"
+                f"  <b>評分者</b><br>"
+                f"  <code style='font-size:10px'>{rater}</code>{rater_blocked}<br>"
+                f"  <div style='margin-top:4px'>{trip_summary(rater)}</div>"
+                f"</td>"
+                f"<td style='font-size:11px'>"
+                f"  <b>被評者</b><br>"
+                f"  <code style='font-size:10px'>{ratee}</code>{ratee_blocked}<br>"
+                f"  <div style='margin-top:4px'>{trip_summary(ratee)}</div>"
+                f"</td>"
+                f"<td style='text-align:center'>{stars}<br>({score})</td>"
+                f"<td style='font-size:12px;text-align:center'>#{mid}<br>{str(cat)[:10]}</td>"
+                f"<td style='text-align:center'>{contact_btn}</td>"
                 f"</tr>"
             )
+
         html = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>低評分名單</title>
+<title>低評分調查</title>
 <style>
   body{{font-family:'Noto Sans TC',sans-serif;margin:20px;color:#333;font-size:14px}}
   h1{{color:#c0392b}}
   table{{border-collapse:collapse;width:100%;margin-top:12px}}
   th{{background:#c0392b;color:#fff;padding:7px 10px;text-align:left;font-size:12px}}
-  td{{padding:6px 10px;border-bottom:1px solid #eee;vertical-align:middle}}
-  tr:hover{{background:#fff5f5}}
+  td{{padding:8px 10px;border-bottom:2px solid #f0e0e0;vertical-align:top}}
+  tr:hover{{background:#fff8f8}}
   .back{{color:#2c7a4b;font-size:13px;text-decoration:none}}
+  code{{background:#f5f5f5;padding:2px 4px;border-radius:4px;word-break:break-all}}
 </style></head>
 <body>
-<h1>⚠️ 低評分名單（1-2 星）</h1>
+<h1>⚠️ 低評分調查（1-2 星）</h1>
 <a class="back" href="/admin?token={token}">← 返回後台</a>
-<p style="margin-top:8px;color:#666;font-size:13px">共 {len(rows)} 筆 ｜ 🚫 = 已封鎖</p>
+<p style="margin-top:8px;color:#666;font-size:13px">共 {len(ratings)} 筆 ｜ 🚫 = 已封鎖 ｜ 顯示評分者+被評者各自行程條件，方便交叉比對</p>
 <table>
-<tr><th>評分者 (rater)</th><th>被評者 (ratee)</th><th>分數</th><th>行程ID</th><th>時間</th><th>操作</th></tr>
-{trs if trs else '<tr><td colspan="6" style="text-align:center;padding:20px;color:#999">目前無低評分紀錄</td></tr>'}
+<tr><th>評分者 & 行程</th><th>被評者 & 行程</th><th>分數</th><th>行程ID/時間</th><th>聯絡</th></tr>
+{trs if trs else '<tr><td colspan="5" style="text-align:center;padding:20px;color:#999">目前無低評分紀錄</td></tr>'}
 </table>
 </body></html>"""
         return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
