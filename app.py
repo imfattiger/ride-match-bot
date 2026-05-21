@@ -2102,7 +2102,7 @@ def admin_low_ratings():
         if all_uids:
             ph = ','.join(['%s' if USE_PG else '?'] * len(all_uids))
             trip_rows = conn.execute(
-                f"SELECT user_id, id, user_type, s_city, s_dist, e_city, e_dist, time_info, fee, detail FROM matches WHERE user_id IN ({ph}) ORDER BY created_at DESC",
+                f"SELECT user_id, id, user_type, s_city, s_dist, e_city, e_dist, time_info, fee, prefs FROM matches WHERE user_id IN ({ph}) ORDER BY created_at DESC",
                 all_uids
             ).fetchall()
             for row in trip_rows:
@@ -2116,10 +2116,10 @@ def admin_low_ratings():
             if not trips:
                 return '<span style="color:#aaa">無行程紀錄</span>'
             t = trips[0]  # 最新一筆
-            tid, utype, sc, sd, ec, ed, tinfo, fee, detail = t
+            tid, utype, sc, sd, ec, ed, tinfo, fee, prefs = t
             icon = '🚗' if utype == 'driver' else '🙋'
             fee_str = f' 費用:{fee}' if fee else ''
-            detail_str = f'<br><small style="color:#888">{str(detail)[:60]}</small>' if detail else ''
+            detail_str = f'<br><small style="color:#888">{str(prefs)[:60]}</small>' if prefs else ''
             return f'{icon} {sc}{sd}→{ec}{ed}<br><small>{str(tinfo)[5:16]}{fee_str}</small>{detail_str}'
 
         trs = ""
