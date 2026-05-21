@@ -1873,6 +1873,7 @@ def admin_panel():
 <body>
 <h1>🚗 sun car 順咖媒合 管理後台</h1>
 <a href="/admin/community?token={os.getenv('ADMIN_SECRET','')}" style="color:#2c7a4b;font-size:13px;text-decoration:none">🐟 基隆社群用戶管理 →</a>
+<a href="/admin/low-ratings?token={os.getenv('ADMIN_SECRET','')}" style="color:#c0392b;font-size:13px;text-decoration:none;margin-left:16px">⚠️ 低評分名單 →</a>
 <div>
   <span class="stat">行程總數 <b>{len(trips)}</b></span>
   <span class="stat">配對紀錄 <b>{len(pairs)}</b></span>
@@ -2045,6 +2046,59 @@ def admin_community():
 <table>
 <tr><th>用戶ID（前12碼）</th><th>加入時間（首次行程）</th><th>總行程數</th><th>Active</th><th>成功配對</th><th>最近行程</th></tr>
 {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">尚無基隆社群用戶</td></tr>'}
+</table>
+</body></html>"""
+        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route("/admin/low-ratings", methods=['GET'])
+def admin_low_ratings():
+    if not _check_admin_token():
+        return "<h3>401 Unauthorized</h3>", 401
+    try:
+        conn = get_db()
+        rows = conn.execute(q(
+            "SELECT rater_id, ratee_id, score, match_id, created_at FROM ratings WHERE score <= 2 ORDER BY created_at DESC"
+        )).fetchall()
+        blocked = set(r[0] for r in conn.execute(q("SELECT user_id FROM blocked_users")).fetchall())
+        conn.close()
+        token = request.args.get('token', '')
+        trs = ""
+        for rater, ratee, score, mid, cat in rows:
+            stars = '⭐' * score
+            rater_blocked = '🚫' if rater in blocked else ''
+            ratee_blocked = '🚫' if ratee in blocked else ''
+            trs += (
+                f"<tr>"
+                f"<td style='font-family:monospace;font-size:12px'>{rater}{rater_blocked}</td>"
+                f"<td style='font-family:monospace;font-size:12px'>{ratee}{ratee_blocked}</td>"
+                f"<td>{stars}({score})</td>"
+                f"<td>{mid}</td>"
+                f"<td style='font-size:12px'>{str(cat)[:16]}</td>"
+                f"<td><a href='https://line.me/R/ti/p/{ratee}' target='_blank' style='color:#2c7a4b'>聯絡被評者</a></td>"
+                f"</tr>"
+            )
+        html = f"""<!DOCTYPE html>
+<html lang="zh-Hant">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>低評分名單</title>
+<style>
+  body{{font-family:'Noto Sans TC',sans-serif;margin:20px;color:#333;font-size:14px}}
+  h1{{color:#c0392b}}
+  table{{border-collapse:collapse;width:100%;margin-top:12px}}
+  th{{background:#c0392b;color:#fff;padding:7px 10px;text-align:left;font-size:12px}}
+  td{{padding:6px 10px;border-bottom:1px solid #eee;vertical-align:middle}}
+  tr:hover{{background:#fff5f5}}
+  .back{{color:#2c7a4b;font-size:13px;text-decoration:none}}
+</style></head>
+<body>
+<h1>⚠️ 低評分名單（1-2 星）</h1>
+<a class="back" href="/admin?token={token}">← 返回後台</a>
+<p style="margin-top:8px;color:#666;font-size:13px">共 {len(rows)} 筆 ｜ 🚫 = 已封鎖</p>
+<table>
+<tr><th>評分者 (rater)</th><th>被評者 (ratee)</th><th>分數</th><th>行程ID</th><th>時間</th><th>操作</th></tr>
+{trs if trs else '<tr><td colspan="6" style="text-align:center;padding:20px;color:#999">目前無低評分紀錄</td></tr>'}
 </table>
 </body></html>"""
         return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
