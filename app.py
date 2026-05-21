@@ -1123,51 +1123,73 @@ def get_terms_flex():
 
 # --- 歡迎訊息 Flex 卡片（Item 3）---
 def get_welcome_flex():
+    def _step(num, title, desc):
+        return {"type": "box", "layout": "horizontal", "spacing": "md",
+                "paddingTop": "8px", "paddingBottom": "8px",
+                "borderColor": "#EEF1F4",
+                "contents": [
+                    {"type": "box", "layout": "vertical", "width": "24px", "height": "24px",
+                     "cornerRadius": "8px", "backgroundColor": "#D58A3A",
+                     "justifyContent": "center", "alignItems": "center",
+                     "contents": [{"type": "text", "text": num, "size": "xs", "color": "#FFFFFF",
+                                   "weight": "bold", "align": "center"}]},
+                    {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+                        {"type": "text", "text": title, "size": "sm", "color": "#1A1D21",
+                         "weight": "bold"},
+                        {"type": "text", "text": desc, "size": "xxs", "color": "#7A828B",
+                         "wrap": True, "margin": "xs"}
+                    ]}
+                ]}
+
     bubble = {
         "type": "bubble",
         "header": {
-            "type": "box", "layout": "vertical",
-            "backgroundColor": "#4DA873",
+            "type": "box", "layout": "vertical", "paddingAll": "20px",
+            "backgroundColor": "#FAF6EE",
             "contents": [
-                {"type": "text", "text": "sun car 順咖媒合", "weight": "bold", "color": "#FFFFFF", "size": "lg"},
-                {"type": "text", "text": "共乘・帶貨・順路媒合，省錢又環保", "color": "#FFFFFFBB", "size": "xs", "margin": "sm"}
+                {"type": "text", "text": "SUN CAR 順咖媒合", "weight": "bold",
+                 "color": "#1E5A99", "size": "xl", "align": "center"},
+                {"type": "text", "text": "共乘・帶貨・順路媒合，省錢又環保",
+                 "size": "xs", "color": "#4A5057", "align": "center", "margin": "sm"}
             ]
         },
         "body": {
-            "type": "box", "layout": "vertical", "spacing": "lg",
+            "type": "box", "layout": "vertical", "paddingAll": "16px",
             "contents": [
-                {"type": "text", "text": "四步驟開始使用：", "weight": "bold", "size": "md"},
-                {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                    {"type": "text", "text": "1️⃣ 選擇身份：載客/貨（含順路帶貨）或 搭車/寄物", "size": "sm", "wrap": True},
-                    {"type": "text", "text": "2️⃣ 設定出發時間", "size": "sm"},
-                    {"type": "text", "text": "3️⃣ 選擇起點與終點", "size": "sm"},
-                    {"type": "text", "text": "4️⃣ 填寫細節後發布，系統自動媒合", "size": "sm", "wrap": True}
-                ]},
+                {"type": "text", "text": "四步驟開始使用",
+                 "size": "xxs", "color": "#7A828B", "weight": "bold",
+                 "margin": "none"},
+                {"type": "separator", "margin": "sm"},
+                _step("1", "選擇身份", "載客/貨（含順路帶貨）或搭車/寄物"),
                 {"type": "separator"},
-                {"type": "text", "text": "隨時輸入「我的行程」管理已發布行程\n輸入「媒合規則」了解配對邏輯\n輸入「有新配對嗎」查詢未送達通知\n輸入「關閉配對通知」停止主動推播\n輸入「幫助」重新查看本說明\n輸入「回報問題」送出建議或回饋", "size": "xs", "color": "#7A828B", "wrap": True}
+                _step("2", "設定出發時間", "單次或固定路線（每週同一時段）"),
+                {"type": "separator"},
+                _step("3", "選擇起點與終點", "系統依縣市與區域分群媒合"),
+                {"type": "separator"},
+                _step("4", "填寫細節後發布", "有人同向系統會主動推播通知"),
+                {"type": "separator", "margin": "md"},
+                {"type": "text",
+                 "text": "輸入指令：我的行程・媒合規則・有新配對嗎・幫助・回報問題",
+                 "size": "xxs", "color": "#7A828B", "wrap": True, "margin": "sm"}
             ]
         },
         "footer": {
-            "type": "box", "layout": "vertical", "spacing": "sm",
+            "type": "box", "layout": "vertical", "spacing": "sm", "paddingAll": "12px",
             "contents": [
-                {"type": "button", "style": "primary", "color": "#00A878", "height": "sm",
+                {"type": "button", "style": "primary", "height": "sm", "color": "#4DA873",
                  "action": {"type": "message", "label": "🚗 我要載客/貨", "text": "我要載客/貨"}},
-                {"type": "button", "style": "primary", "color": "#00A878", "height": "sm",
+                {"type": "button", "style": "primary", "height": "sm", "color": "#5689B4",
                  "action": {"type": "message", "label": "🙋 我要搭車/寄物", "text": "我要搭車/寄物"}},
-                {"type": "button", "style": "primary", "color": "#00A878", "height": "sm",
+                {"type": "button", "style": "secondary", "height": "sm",
                  "action": {"type": "message", "label": "🔍 瀏覽現有行程", "text": "找行程"}},
-                {"type": "button", "style": "primary", "color": "#3D4451", "height": "sm",
-                 "action": {"type": "message", "label": "📋 媒合規則說明", "text": "媒合規則"}},
-                {"type": "button", "style": "primary", "color": "#3D4451", "height": "sm",
-                 "action": {"type": "message", "label": "📝 回報問題／建議", "text": "回報問題"}},
-                {"type": "button", "style": "primary", "color": "#3D4451", "height": "sm",
-                 "action": {"type": "uri", "label": "🏘️ 加入 FB 共乘社團", "uri": "https://www.facebook.com/share/g/1B6rh1hBKV/"}},
-                {"type": "button", "style": "primary", "color": "#3D4451", "height": "sm",
-                 "action": {"type": "uri", "label": "📢 FB 粉專（最新消息／維修回報）", "uri": "https://www.facebook.com/profile.php?id=61572149019298"}},
-                {"type": "button", "style": "primary", "color": "#3D4451", "height": "sm",
-                 "action": {"type": "uri", "label": "☕ 斗內支持開發者", "uri": "https://p.ecpay.com.tw/8C9FE97"}},
-                {"type": "button", "style": "primary", "color": "#6B7280", "height": "sm",
-                 "action": {"type": "message", "label": "⚖️ 免責聲明與使用條款", "text": "免責聲明"}}
+                {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
+                    {"type": "button", "style": "link", "height": "sm", "flex": 1, "color": "#7A828B",
+                     "action": {"type": "uri", "label": "🏘️ FB 社團", "uri": "https://www.facebook.com/share/g/1B6rh1hBKV/"}},
+                    {"type": "button", "style": "link", "height": "sm", "flex": 1, "color": "#7A828B",
+                     "action": {"type": "uri", "label": "☕ 斗內", "uri": "https://p.ecpay.com.tw/8C9FE97"}},
+                    {"type": "button", "style": "link", "height": "sm", "flex": 1, "color": "#7A828B",
+                     "action": {"type": "message", "label": "⚖️ 條款", "text": "免責聲明"}}
+                ]}
             ]
         }
     }
@@ -1264,7 +1286,8 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
 
     # --- 2×2 meta grid ---
     time_display = tt.replace("T", " ")[5:16] if len(tt) >= 16 else tt.replace("T", " ")
-    veh_display = vehicle_type + (f"/{plate_no}" if plate_no else "") if vehicle_type else "未設定"
+    # 第四格：中途（設計稿規格），車型若有則補在 waypoint 區
+    way_display = way_point.split("|")[0] if way_point else "未設定"
     meta_row1 = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
         {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA", "cornerRadius": "10px",
          "paddingAll": "8px", "contents": [
@@ -1282,13 +1305,13 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
             {"type": "text", "text": f"{pc}人", "size": "sm", "color": "#1A1D21", "weight": "bold"}]},
         {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA", "cornerRadius": "10px",
          "paddingAll": "8px", "contents": [
-            {"type": "text", "text": "車型", "size": "xxs", "color": "#7A828B", "weight": "bold"},
-            {"type": "text", "text": veh_display, "size": "sm", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+            {"type": "text", "text": "中途", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+            {"type": "text", "text": way_display, "size": "sm", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
     ]}
 
     body_contents = [route_box, meta_row1, meta_row2]
 
-    # --- waypoint extras ---
+    # --- waypoint extras (上下車地點) ---
     if way_point:
         wp_parts = way_point.split("|")
         for part in wp_parts[1:]:
@@ -1297,6 +1320,13 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
                 body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "margin": "sm", "contents": [
                     {"type": "text", "text": label, "color": "#7A828B", "size": "sm", "flex": 1},
                     {"type": "text", "text": val, "color": "#4A5057", "size": "sm", "flex": 4, "wrap": True}]})
+
+    # --- 車型補充行（有才顯示）---
+    if vehicle_type:
+        veh_display = vehicle_type + (f" / {plate_no}" if plate_no else "")
+        body_contents.append({"type": "box", "layout": "baseline", "spacing": "sm", "margin": "sm", "contents": [
+            {"type": "text", "text": "車型", "color": "#7A828B", "size": "sm", "flex": 1},
+            {"type": "text", "text": veh_display, "color": "#4A5057", "size": "sm", "flex": 4, "wrap": True}]})
 
     # --- prefs tags ---
     if prefs:
@@ -2630,66 +2660,110 @@ def handle_message(event):
                     ), (m_id, m_id)).fetchone()[0]
                 finally:
                     pair_conn.close()
-                role = ("🚗 載客/貨" if utype == 'driver' else "🙋 搭車/寄物") + (" ⚠️ 已過期" if is_expired else "")
-                hdr_color = "#7A828B" if is_expired else ("#1D9E75" if utype == 'driver' else "#5689B4")
-                lid_text = f"@{lid}" if lid else "未設定"
-                vc_text = f"{vc or 0} 次"
-                exp_text = str(exp_at)[5:16] if exp_at else "未知"
-                time_text = t_info[5:16] + (" 起" if is_recur else "")
-                body_items = [
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#1A1D21", "size": "sm", "flex": 4, "wrap": True}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": time_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "費用", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": fee or "未設定", "color": "#1A1D21", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "LINE ID", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": lid_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "瀏覽", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": vc_text, "color": "#7A828B", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "配對", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{pair_cnt} 次", "color": "#1D9E75" if pair_cnt > 0 else "#7A828B", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "下架", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]},
+
+                is_driver = utype == 'driver'
+                accent = "#4DA873" if is_driver else "#5689B4"
+                hdr_color = "#7A828B" if is_expired else ("#3F8C5F" if is_driver else "#436F94")
+                icon = "🚗" if is_driver else "🙋"
+                role_label = ("載客/貨" if is_driver else "搭車/寄物") + (" · 已過期 ⚠️" if is_expired else "")
+                role_sub = "提供座位" if is_driver else "徵求順路座位"
+
+                # --- header ---
+                hdr_contents = [
+                    {"type": "box", "layout": "horizontal", "contents": [
+                        {"type": "box", "layout": "vertical", "width": "32px", "height": "32px",
+                         "cornerRadius": "10px", "backgroundColor": "rgba(255,255,255,0.22)",
+                         "justifyContent": "center", "alignItems": "center",
+                         "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
+                        {"type": "box", "layout": "vertical", "flex": 1, "paddingStart": "10px", "contents": [
+                            {"type": "text", "text": role_label, "weight": "bold", "size": "sm", "color": "#FFFFFF"},
+                            {"type": "text", "text": role_sub, "size": "xxs", "color": "rgba(255,255,255,0.82)"}
+                        ]}
+                    ]}
                 ]
+
+                # --- 路線視覺化 ---
+                time_text = t_info[5:16] + (" 起" if is_recur else "")
+                route_pin = {"type": "box", "layout": "vertical", "width": "14px", "spacing": "none",
+                    "justifyContent": "center", "contents": [
+                        {"type": "text", "text": "●", "color": accent, "size": "xxs", "align": "center"},
+                        {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
+                        {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
+                        {"type": "text", "text": "■", "color": "#1A1D21", "size": "xxs", "align": "center"},
+                    ]}
+                route_text_col = {"type": "box", "layout": "vertical", "flex": 1, "spacing": "none", "contents": [
+                    {"type": "text", "text": sc, "size": "xxs", "color": "#7A828B"},
+                    {"type": "text", "text": sd, "size": "sm", "color": "#1A1D21", "weight": "bold"},
+                    {"type": "text", "text": ec, "size": "xxs", "color": "#7A828B", "margin": "sm"},
+                    {"type": "text", "text": ed, "size": "sm", "color": "#1A1D21", "weight": "bold"},
+                ]}
+                route_box = {"type": "box", "layout": "horizontal", "spacing": "sm",
+                             "paddingBottom": "8px", "contents": [route_pin, route_text_col]}
+
+                # --- 2×2 meta grid ---
+                lid_text = f"@{lid}" if lid else "未設定"
+                veh_text = (vtype + (f"/{pno}" if pno else "")) if vtype else "—"
+                meta_row1 = {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": "出發時間", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": time_text, "size": "xs", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": "費用", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": fee or "未設定", "size": "xs", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+                ]}
+                meta_row2 = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": "LINE ID", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": lid_text, "size": "xs", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": "車型", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": veh_text, "size": "xs", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+                ]}
+
+                body_items = [route_box, meta_row1, meta_row2]
+
+                # --- 統計 row: 瀏覽/配對/下架 ---
+                exp_text = str(exp_at)[5:16] if exp_at else "未知"
+                pair_color = "#1D9E75" if pair_cnt > 0 else "#7A828B"
+                body_items.append({"type": "box", "layout": "horizontal", "margin": "sm", "spacing": "sm", "contents": [
+                    {"type": "text", "text": f"👁 {vc or 0}", "size": "xxs", "color": "#7A828B", "flex": 1, "align": "center"},
+                    {"type": "text", "text": f"🎯 配對 {pair_cnt}", "size": "xxs", "color": pair_color, "flex": 1, "align": "center"},
+                    {"type": "text", "text": f"⏳ {exp_text}", "size": "xxs", "color": "#C99452", "flex": 2, "align": "end"},
+                ]})
+
+                # 循環週期行（有才顯示）
                 if is_recur and recur_wd:
-                    body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "循環", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": "🔁 每週 " + _recur_days_label(recur_wd), "color": "#1D9E75", "size": "sm", "flex": 4}]})
-                if vtype:
-                    veh_display = vtype + (f" / {pno}" if pno else "")
-                    body_items.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "車型", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": veh_display, "color": "#1A1D21", "size": "sm", "flex": 4}]})
+                    body_items.append({"type": "text", "text": "🔁 每週 " + _recur_days_label(recur_wd),
+                                       "size": "xxs", "color": "#4DA873", "margin": "xs"})
+
+                # --- footer buttons (邏輯不變) ---
                 notify_label = "🔕 關閉配對通知" if notify_on else "🔔 開啟配對通知"
                 notify_text = "關閉配對通知" if notify_on else "開啟配對通知"
-                extra_btns = []
-                extra_btns.append({"type": "button", "style": "secondary", "height": "sm",
-                    "action": {"type": "postback", "label": "🔁 改循環天數", "data": f"action=edit_recur&id={m_id}"}})
-                if utype == 'driver':
+                extra_btns = [{"type": "button", "style": "secondary", "height": "sm",
+                    "action": {"type": "postback", "label": "🔁 改循環天數", "data": f"action=edit_recur&id={m_id}"}}]
+                if is_driver:
                     extra_btns.append({"type": "button", "style": "secondary", "height": "sm",
                         "action": {"type": "postback", "label": "🚗 改車型/車牌", "data": f"action=edit_vehicle&id={m_id}"}})
+
                 bubbles.append({
                     "type": "bubble",
-                    "header": {"type": "box", "layout": "vertical",
-                        "contents": [{"type": "text", "text": role, "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
-                        "backgroundColor": hdr_color},
-                    "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_items},
-                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": (
+                    "header": {"type": "box", "layout": "vertical", "paddingAll": "14px",
+                               "backgroundColor": hdr_color, "contents": hdr_contents},
+                    "body": {"type": "box", "layout": "vertical", "paddingAll": "14px",
+                             "contents": body_items},
+                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm",
+                               "paddingAll": "12px", "contents": (
                         [
                             {"type": "button", "style": "primary", "height": "sm", "color": "#E07B00",
                              "action": {"type": "postback", "label": "🔄 重新上架（延長 3 天）", "data": f"action=extend&id={m_id}"}},
                             {"type": "button", "style": "secondary", "height": "sm",
                              "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=delete&id={m_id}"}}
                         ] if is_expired else [
-                            {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                            {"type": "button", "style": "primary", "height": "sm", "color": accent,
                              "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={m_id}"}},
                             {"type": "button", "style": "secondary", "height": "sm",
                              "action": {"type": "postback", "label": "✏️ 改LINE ID", "data": f"action=edit_line_id&id={m_id}"}},
@@ -2966,14 +3040,20 @@ def handle_message(event):
             for r in rows:
                 trip_id, owner_uid, utype, tinfo, sc, sd, ec, ed, fee, pc, lid, exp_at, vtype, pno = r
                 avg, cnt = get_user_rating(conn, owner_uid)
-                rating_text = f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分"
-                icon = "🚗" if utype == 'driver' else "🙋"
-                role = "司機" if utype == 'driver' else "乘客"
-                hdr_color = "#1D9E75" if utype == 'driver' else "#5689B4"
+                rating_pill = f"⭐ {avg}" if avg else None
+                is_driver = utype == 'driver'
+                icon = "🚗" if is_driver else "🙋"
+                role_label = "司機 · Driver" if is_driver else "乘客 · Seeker"
+                role_sub = "提供座位" if is_driver else "徵求順路座位"
+                hdr_color = "#3F8C5F" if is_driver else "#436F94"
+                accent = "#4DA873" if is_driver else "#5689B4"
+                accent_bg = "#EAF3EE" if is_driver else "#ECF1F6"
                 is_own = (owner_uid == uid)
+
+                # --- footer CTA (邏輯不變) ---
                 if is_own:
                     footer_contents = [
-                        {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                        {"type": "button", "style": "primary", "height": "sm", "color": accent,
                          "action": {"type": "postback", "label": "✅ 已搭乘完成", "data": f"action=complete&id={trip_id}"}},
                         {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                             {"type": "button", "style": "secondary", "height": "sm", "flex": 1,
@@ -2984,7 +3064,7 @@ def handle_message(event):
                     ]
                 elif lid:
                     footer_contents = [
-                        {"type": "button", "style": "primary", "height": "sm", "color": "#1D9E75",
+                        {"type": "button", "style": "primary", "height": "sm", "color": accent,
                          "action": {"type": "uri", "label": "💬 加 LINE 聯絡", "uri": f"https://line.me/ti/p/~{lid}"}},
                         {"type": "button", "style": "link", "height": "sm", "color": "#C26167",
                          "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
@@ -2997,41 +3077,91 @@ def handle_message(event):
                         {"type": "button", "style": "link", "height": "sm", "color": "#C26167",
                          "action": {"type": "postback", "label": "🚨 檢舉此用戶", "data": f"action=report&uid={owner_uid}&trip_id={trip_id}"}}
                     ]
-                exp_text = str(exp_at)[5:16] if exp_at else "未知"
-                body_rows = [
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "路線", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{sc}{sd} ➔ {ec}{ed}", "color": "#1A1D21", "size": "sm", "flex": 4, "wrap": True}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "時間", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": tinfo[5:16], "color": "#1A1D21", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "費用", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": fee, "color": "#1A1D21", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "人數", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{pc}人", "color": "#1A1D21", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "評分", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": rating_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
-                    {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "下架", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": exp_text, "color": "#e07b00", "size": "sm", "flex": 4}]}
+
+                # --- header: badge + 角色 + 評分 pill ---
+                hdr_right = []
+                if rating_pill:
+                    hdr_right = [{"type": "text", "text": rating_pill, "size": "sm", "color": "#FFFFFF",
+                                  "align": "end", "gravity": "center", "flex": 0,
+                                  "backgroundColor": "rgba(0,0,0,0)"}]
+                hdr_contents = [
+                    {"type": "box", "layout": "horizontal", "contents": [
+                        {"type": "box", "layout": "vertical", "width": "32px", "height": "32px",
+                         "cornerRadius": "10px", "backgroundColor": "rgba(255,255,255,0.22)",
+                         "justifyContent": "center", "alignItems": "center",
+                         "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
+                        {"type": "box", "layout": "vertical", "flex": 1, "paddingStart": "10px", "contents": [
+                            {"type": "text", "text": role_label, "weight": "bold", "size": "sm", "color": "#FFFFFF"},
+                            {"type": "text", "text": role_sub, "size": "xxs", "color": "rgba(255,255,255,0.82)"}
+                        ]},
+                    ] + ([{"type": "text", "text": rating_pill, "size": "xs", "color": "#FFFFFF",
+                           "align": "end", "gravity": "center"}] if rating_pill else [])}
                 ]
-                if vtype:
-                    veh_display = vtype + (f" / {pno}" if pno else "")
-                    body_rows.append({"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                        {"type": "text", "text": "車型", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": veh_display, "color": "#1A1D21", "size": "sm", "flex": 4}]})
+
+                # --- body: 路線視覺化 ---
+                route_pin = {"type": "box", "layout": "vertical", "width": "14px", "spacing": "none",
+                    "justifyContent": "center", "contents": [
+                        {"type": "text", "text": "●", "color": accent, "size": "xxs", "align": "center"},
+                        {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
+                        {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
+                        {"type": "text", "text": "■", "color": "#1A1D21", "size": "xxs", "align": "center"},
+                    ]}
+                route_text_col = {"type": "box", "layout": "vertical", "flex": 1, "spacing": "none", "contents": [
+                    {"type": "text", "text": sc, "size": "xxs", "color": "#7A828B"},
+                    {"type": "text", "text": sd, "size": "sm", "color": "#1A1D21", "weight": "bold"},
+                    {"type": "text", "text": ec, "size": "xxs", "color": "#7A828B", "margin": "sm"},
+                    {"type": "text", "text": ed, "size": "sm", "color": "#1A1D21", "weight": "bold"},
+                ]}
+                route_box = {"type": "box", "layout": "horizontal", "spacing": "sm",
+                             "paddingBottom": "8px", "contents": [route_pin, route_text_col]}
+
+                # --- 2×2 meta grid ---
+                seats_label = "座位" if is_driver else "人數"
+                veh_text = (vtype + (f"/{pno}" if pno else "")) if vtype else "—"
+                meta_row1 = {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": "出發時間", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": tinfo[5:16], "size": "xs", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": "費用", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": fee or "—", "size": "xs", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+                ]}
+                meta_row2 = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "sm", "contents": [
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": seats_label, "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": f"{pc}人", "size": "xs", "color": "#1A1D21", "weight": "bold"}]},
+                    {"type": "box", "layout": "vertical", "flex": 1, "backgroundColor": "#F7F8FA",
+                     "cornerRadius": "10px", "paddingAll": "8px", "contents": [
+                        {"type": "text", "text": "車型", "size": "xxs", "color": "#7A828B", "weight": "bold"},
+                        {"type": "text", "text": veh_text, "size": "xs", "color": "#1A1D21", "weight": "bold", "wrap": True}]},
+                ]}
+
+                body_contents = [route_box, meta_row1, meta_row2]
+
+                # 下架 + 評分行
+                exp_text = str(exp_at)[5:16] if exp_at else "未知"
+                body_contents.append({"type": "box", "layout": "horizontal", "margin": "sm",
+                    "spacing": "sm", "contents": [
+                        {"type": "text", "text": f"⏳ 下架 {exp_text}", "size": "xxs", "color": "#C99452", "flex": 1},
+                        {"type": "text", "text": f"⭐ {avg}（{cnt}筆）" if avg else "暫無評分",
+                         "size": "xxs", "color": "#7A828B", "align": "end", "flex": 1},
+                    ]})
+
                 if is_own:
-                    body_rows.append({"type": "text", "text": "✏️ 這是你的行程", "size": "xxs", "color": "#7A828B", "align": "end"})
+                    body_contents.append({"type": "text", "text": "✏️ 這是你的行程",
+                                          "size": "xxs", "color": "#7A828B", "align": "end", "margin": "xs"})
+
                 bubbles.append({
                     "type": "bubble",
-                    "header": {"type": "box", "layout": "vertical",
-                        "contents": [{"type": "text", "text": f"{icon} {role}", "weight": "bold", "color": "#FFFFFF", "size": "sm"}],
-                        "backgroundColor": hdr_color},
-                    "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_rows},
-                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": footer_contents}
+                    "header": {"type": "box", "layout": "vertical", "paddingAll": "14px",
+                               "backgroundColor": hdr_color, "contents": hdr_contents},
+                    "body": {"type": "box", "layout": "vertical", "paddingAll": "14px",
+                             "contents": body_contents},
+                    "footer": {"type": "box", "layout": "vertical", "spacing": "sm",
+                               "paddingAll": "12px", "contents": footer_contents}
                 })
             # 累加瀏覽次數
             trip_ids = [r[0] for r in rows]
