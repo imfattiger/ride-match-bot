@@ -799,7 +799,8 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
 
     def _icon_row(icon, icon_bg, icon_color, value_text, meta_text=None):
         contents = [
-            {"type": "box", "layout": "vertical", "width": "28px", "height": "28px",
+            {"type": "box", "layout": "vertical", "width": "28px",
+             "paddingTop": "6px", "paddingBottom": "6px",
              "cornerRadius": "8px", "backgroundColor": icon_bg,
              "justifyContent": "center", "alignItems": "center",
              "contents": [{"type": "text", "text": icon, "size": "sm", "align": "center", "color": icon_color}]},
@@ -841,7 +842,8 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
         "type": "box", "layout": "horizontal", "paddingAll": "14px",
         "backgroundColor": main_color, "spacing": "md", "alignItems": "center",
         "contents": [
-            {"type": "box", "layout": "vertical", "width": "36px", "height": "36px",
+            {"type": "box", "layout": "vertical", "width": "40px",
+             "paddingTop": "8px", "paddingBottom": "8px",
              "cornerRadius": "10px", "backgroundColor": "#5BBF7E" if ut=="driver" else "#6A9EC4",
              "justifyContent": "center", "alignItems": "center",
              "contents": [{"type": "text", "text": "🚗" if ut=="driver" else "🙋",
@@ -1147,7 +1149,7 @@ def get_welcome_flex():
                 "paddingTop": "8px", "paddingBottom": "8px",
                 "borderColor": "#EEF1F4",
                 "contents": [
-                    {"type": "box", "layout": "vertical", "width": "24px", "height": "24px",
+                    {"type": "box", "layout": "vertical", "width": "24px", "paddingTop": "5px", "paddingBottom": "5px",
                      "cornerRadius": "8px", "backgroundColor": "#D58A3A",
                      "justifyContent": "center", "alignItems": "center",
                      "contents": [{"type": "text", "text": num, "size": "xs", "color": "#FFFFFF",
@@ -1219,7 +1221,7 @@ def get_rules_flex():
     def _rule(icon, bg, color, title, desc):
         return {"type": "box", "layout": "horizontal", "spacing": "md", "alignItems": "flex-start",
                 "paddingTop": "8px", "paddingBottom": "8px", "contents": [
-                    {"type": "box", "layout": "vertical", "width": "32px", "height": "32px",
+                    {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
                      "cornerRadius": "9px", "backgroundColor": bg, "justifyContent": "center",
                      "alignItems": "center", "contents": [
                          {"type": "text", "text": icon, "size": "sm", "align": "center", "color": color}]},
@@ -1258,7 +1260,7 @@ def get_rules_flex():
             "type": "box", "layout": "horizontal", "paddingAll": "14px",
             "backgroundColor": "#1A1D21", "spacing": "md", "alignItems": "center",
             "contents": [
-                {"type": "box", "layout": "vertical", "width": "36px", "height": "36px",
+                {"type": "box", "layout": "vertical", "width": "40px", "paddingTop": "8px", "paddingBottom": "8px",
                  "cornerRadius": "10px", "backgroundColor": "#2E3237",
                  "justifyContent": "center", "alignItems": "center",
                  "contents": [{"type": "text", "text": "📋", "size": "lg", "align": "center"}]},
@@ -2803,7 +2805,7 @@ def handle_message(event):
                 # --- header ---
                 hdr_contents = [
                     {"type": "box", "layout": "horizontal", "contents": [
-                        {"type": "box", "layout": "vertical", "width": "32px", "height": "32px",
+                        {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
                          "cornerRadius": "10px", "backgroundColor": "rgba(255,255,255,0.22)",
                          "justifyContent": "center", "alignItems": "center",
                          "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
@@ -3218,7 +3220,7 @@ def handle_message(event):
                                   "backgroundColor": "rgba(0,0,0,0)"}]
                 hdr_contents = [
                     {"type": "box", "layout": "horizontal", "contents": [
-                        {"type": "box", "layout": "vertical", "width": "32px", "height": "32px",
+                        {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
                          "cornerRadius": "10px", "backgroundColor": "rgba(255,255,255,0.22)",
                          "justifyContent": "center", "alignItems": "center",
                          "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
