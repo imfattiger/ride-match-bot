@@ -1552,7 +1552,13 @@ def do_publish(uid, reply_token):
         output.append(TextSendMessage(text=hint))
 
     _store_log("publish_reply_sent", f"uid={uid[:8]} output_len={len(output)}")
-    safe_reply(reply_token, output)
+    try:
+        line_bot_api.reply_message(reply_token, output)
+        _store_log("publish_reply_ok", f"uid={uid[:8]}")
+    except Exception as _reply_err:
+        err_msg = str(_reply_err)
+        _store_log("publish_reply_fail", err_msg[:300])
+        safe_push(uid, TextSendMessage(text=f"✅ 行程已發布！（卡片顯示失敗，錯誤：{err_msg[:150]}）\n\n輸入「我的行程」可查看。"))
 
 # --- 5. 核心匹配演算法 ---
 def find_matches_v15(user_id, utype, t_info, sc, sd, ec, ed, flex, way_point, p_count, recur_days=None):
@@ -3989,7 +3995,11 @@ def handle_message(event):
                 ))
             return
 
-        do_publish(uid, event.reply_token)
+        try:
+            do_publish(uid, event.reply_token)
+        except Exception as _pub_err:
+            _store_log("publish_exception", str(_pub_err)[:300])
+            safe_push(uid, TextSendMessage(text=f"⚠️ 發布時發生錯誤，請截圖回報：\n{str(_pub_err)[:200]}"))
 
     # --- 未知輸入 fallback（含 WAIT_LINE_ID 處理）---
     else:
@@ -4229,7 +4239,11 @@ def handle_message(event):
                 conn.commit()
             finally:
                 conn.close()
-            do_publish(uid, event.reply_token)
+            try:
+                do_publish(uid, event.reply_token)
+            except Exception as _pub_err:
+                _store_log("publish_exception", str(_pub_err)[:300])
+                safe_push(uid, TextSendMessage(text=f"⚠️ 發布時發生錯誤，請截圖回報：\n{str(_pub_err)[:200]}"))
             return
 
         if res and res[0] and res[1]:
