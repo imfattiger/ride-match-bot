@@ -1405,10 +1405,12 @@ def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point=
 
 # --- 發布核心邏輯（供 最終確認發布 和 WAIT_LINE_ID 共用）---
 def do_publish(uid, reply_token):
+    _store_log("publish_start", f"uid={uid[:8]}")
     conn = get_db()
     try:
         res = conn.execute(q('SELECT current_type, temp_time, s_city, s_dist, e_city, e_dist, temp_way, temp_count, temp_fee, temp_flex, temp_prefs, temp_line_id, temp_expire, temp_vehicle, temp_plate, temp_recur_days, referral_source FROM user_state WHERE user_id = ?'), (uid,)).fetchone()
         if not res:
+            _store_log("publish_nostate", f"uid={uid[:8]}")
             safe_reply(reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
         ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp, vt, pn, recur_days, ref_src = res
@@ -1437,9 +1439,11 @@ def do_publish(uid, reply_token):
                            (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None, ref_src or None))
             row = cursor.fetchone()
             if row is None:
+                _store_log("publish_dup", f"uid={uid[:8]} tt={tt} sc={sc} ec={ec}")
                 safe_reply(reply_token, TextSendMessage(text="⚠️ 您已有一筆相同的行程（相同路線與時間），請先刪除舊行程再重新發布。"))
                 return
             new_id = row[0]
+            _store_log("publish_insert_ok", f"uid={uid[:8]} new_id={new_id}")
         else:
             cursor.execute('INSERT OR IGNORE INTO matches (user_id, user_type, time_info, s_city, s_dist, e_city, e_dist, way_point, p_count, fee, flexible, prefs, line_id, expires_at, vehicle_type, plate_no, is_recurring, recur_weekdays, referral_source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                            (uid, ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, expires_at, vt, pn, is_recurring, recur_days or None, ref_src or None))
@@ -1555,6 +1559,7 @@ def do_publish(uid, reply_token):
             hint = "🔎 行程已發布，有人發布同向行程時會自動通知。"
         output.append(TextSendMessage(text=hint))
 
+    _store_log("publish_reply_sent", f"uid={uid[:8]} output_len={len(output)}")
     safe_reply(reply_token, output)
 
 # --- 5. 核心匹配演算法 ---
@@ -4211,6 +4216,7 @@ def handle_message(event):
 
         # 處理 LINE ID 輸入
         if res and res[0] == 'WAIT_LINE_ID':
+            _store_log("wait_line_id_hit", f"uid={uid[:8]} msg={msg[:20]}")
             if msg == '重新輸入LINE ID':
                 safe_reply(event.reply_token, TextSendMessage(
                     text="請輸入你的 LINE ID（不含 @）：\n⌨️ 點左下角鍵盤圖示輸入文字"
