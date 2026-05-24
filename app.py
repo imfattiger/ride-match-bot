@@ -1289,6 +1289,8 @@ def get_rules_flex():
 
 # --- 被動媒合推播 Flex 卡片 ---
 def get_match_notify_flex(sc, sd, ec, ed, tt, pc, fe, prefs, line_id, way_point="", vehicle_type="", plate_no="", publisher_uid="", community_tag=""):
+    pc = pc or "1"
+    fe = fe or "私訊議價"
     COMMUNITY_LABELS = {"keelung_group": "🏘️ 基隆共乘Plus 社友"}
 
     # --- Hero header ---
@@ -1411,6 +1413,11 @@ def do_publish(uid, reply_token):
             safe_reply(reply_token, TextSendMessage(text="⚠️ 找不到暫存資料，請重新開始。"))
             return
         ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid, exp, vt, pn, recur_days, ref_src = res
+        pc = pc or "1"
+        fe = fe or "私訊議價"
+        wy = wy or "接受"
+        fx = fx or "不彈性"
+        ps = ps or ""
         lid = lid or ''
         vt = vt or ''
         pn = pn or ''
