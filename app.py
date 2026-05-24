@@ -735,7 +735,7 @@ def get_dauding_confirm_flex(parsed, uid):
         "header": {"type": "box", "layout": "vertical", "backgroundColor": main_color,
             "contents": [
                 {"type": "text", "text": "📋 從 Dauding 匯入行程", "weight": "bold", "color": "#FFFFFF", "size": "sm"},
-                {"type": "text", "text": "確認以下資訊，選好時間後發布", "color": "#FFFFFFBB", "size": "xs", "margin": "xs"}
+                {"type": "text", "text": "確認以下資訊，選好時間後發布", "color": "#E0F0EA", "size": "xs", "margin": "xs"}
             ]},
         "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
             {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
@@ -2803,15 +2803,17 @@ def handle_message(event):
                 role_sub = "提供座位" if is_driver else "徵求順路座位"
 
                 # --- header ---
+                badge_bg = "#5BBF7E" if is_driver else "#6A9EC4"
+                sub_color = "#DCEFE5" if is_driver else "#D8E6F0"
                 hdr_contents = [
                     {"type": "box", "layout": "horizontal", "contents": [
                         {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
-                         "cornerRadius": "10px", "backgroundColor": "rgba(255,255,255,0.22)",
+                         "cornerRadius": "10px", "backgroundColor": badge_bg,
                          "justifyContent": "center", "alignItems": "center",
                          "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
                         {"type": "box", "layout": "vertical", "flex": 1, "paddingStart": "10px", "contents": [
                             {"type": "text", "text": role_label, "weight": "bold", "size": "sm", "color": "#FFFFFF"},
-                            {"type": "text", "text": role_sub, "size": "xxs", "color": "rgba(255,255,255,0.82)"}
+                            {"type": "text", "text": role_sub, "size": "xxs", "color": sub_color}
                         ]}
                     ]}
                 ]
@@ -3213,20 +3215,17 @@ def handle_message(event):
                     ]
 
                 # --- header: badge + 角色 + 評分 pill ---
-                hdr_right = []
-                if rating_pill:
-                    hdr_right = [{"type": "text", "text": rating_pill, "size": "sm", "color": "#FFFFFF",
-                                  "align": "end", "gravity": "center", "flex": 0,
-                                  "backgroundColor": "rgba(0,0,0,0)"}]
+                badge_bg2 = "#5BBF7E" if is_driver else "#6A9EC4"
+                sub_color2 = "#DCEFE5" if is_driver else "#D8E6F0"
                 hdr_contents = [
                     {"type": "box", "layout": "horizontal", "contents": [
                         {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
-                         "cornerRadius": "10px", "backgroundColor": "rgba(255,255,255,0.22)",
+                         "cornerRadius": "10px", "backgroundColor": badge_bg2,
                          "justifyContent": "center", "alignItems": "center",
                          "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
                         {"type": "box", "layout": "vertical", "flex": 1, "paddingStart": "10px", "contents": [
                             {"type": "text", "text": role_label, "weight": "bold", "size": "sm", "color": "#FFFFFF"},
-                            {"type": "text", "text": role_sub, "size": "xxs", "color": "rgba(255,255,255,0.82)"}
+                            {"type": "text", "text": role_sub, "size": "xxs", "color": sub_color2}
                         ]},
                     ] + ([{"type": "text", "text": rating_pill, "size": "xs", "color": "#FFFFFF",
                            "align": "end", "gravity": "center"}] if rating_pill else [])}
