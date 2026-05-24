@@ -1485,10 +1485,10 @@ def do_publish(uid, reply_token):
                         {"type": "text", "text": f"{m[2]}{m[3]} ➔ {m[4]}{m[5]}", "color": "#1A1D21", "size": "sm", "flex": 4, "wrap": True}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "費用", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": m[6], "color": "#1A1D21", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": m[6] or "私訊議價", "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "人數", "color": "#7A828B", "size": "sm", "flex": 1},
-                        {"type": "text", "text": f"{m[8]}人", "color": "#1A1D21", "size": "sm", "flex": 4}]},
+                        {"type": "text", "text": f"{m[8] or 1}人", "color": "#1A1D21", "size": "sm", "flex": 4}]},
                     {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
                         {"type": "text", "text": "評分", "color": "#7A828B", "size": "sm", "flex": 1},
                         {"type": "text", "text": rating_text, "color": "#1A1D21", "size": "sm", "flex": 4}]},
