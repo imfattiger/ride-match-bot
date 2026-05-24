@@ -774,8 +774,13 @@ def get_dauding_confirm_flex(parsed, uid):
 # --- 4. Flex 卡片建構 ---
 def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", recur_days=""):
     ut, tt, sc, sd, ec, ed, wy, pc, fe, fx, ps, lid = res_data
+    pc = pc or "1"
+    fe = fe or "私訊議價"
+    wy = wy or "接受"
+    fx = fx or "不彈性"
     main_color = "#4DA873" if ut == 'driver' else "#5689B4"
-    ps_text = ps.strip().rstrip(",") if ps else "（未選）"
+    _ps_raw = (ps or "").strip().rstrip(",")
+    ps_text = _ps_raw if _ps_raw else "（未選）"
     role_label = "載客/貨" if ut == "driver" else "搭車/寄物"
     share_text = f"【sun car 順咖媒合】{role_label}徵求 🚗\n\n📍 {sc}{sd} ➔ {ec}{ed}\n🕒 {tt.replace('T', ' ')}\n👤 {pc}人・費用：{fe}\n\n有要同方向的嗎？加 LINE Bot「sun car 順咖媒合」一起揪行程！"
     share_url = f"https://line.me/R/msg/text/?{quote(share_text)}"
