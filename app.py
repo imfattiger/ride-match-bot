@@ -1,4 +1,4 @@
-import os
+﻿import os
 import re
 import json
 import sqlite3
@@ -802,7 +802,6 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
             {"type": "box", "layout": "vertical", "width": "28px",
              "paddingTop": "6px", "paddingBottom": "6px",
              "cornerRadius": "8px", "backgroundColor": icon_bg,
-             "justifyContent": "center", "alignItems": "center",
              "contents": [{"type": "text", "text": icon, "size": "sm", "align": "center", "color": icon_color}]},
             {"type": "text", "text": value_text, "size": "sm", "color": "#1A1D21",
              "weight": "bold", "flex": 1, "wrap": True, "gravity": "center"},
@@ -811,7 +810,7 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
             contents.append({"type": "text", "text": meta_text, "size": "xxs",
                               "color": "#7A828B", "align": "end", "gravity": "center"})
         return {"type": "box", "layout": "horizontal", "spacing": "md",
-                "alignItems": "center", "contents": contents}
+                "contents": contents}
 
     flex_label = "±4小時彈性" if fx == "願意彈性" else "精確時間"
     wy_short = wy.split("|")[0] if wy else "接受中途"
@@ -840,12 +839,10 @@ def get_publish_confirm_flex(res_data, match_id, vehicle_type="", plate_no="", r
       "type": "bubble",
       "header": {
         "type": "box", "layout": "horizontal", "paddingAll": "14px",
-        "backgroundColor": main_color, "spacing": "md", "alignItems": "center",
-        "contents": [
+        "backgroundColor": main_color, "spacing": "md", "contents": [
             {"type": "box", "layout": "vertical", "width": "40px",
              "paddingTop": "8px", "paddingBottom": "8px",
              "cornerRadius": "10px", "backgroundColor": "#5BBF7E" if ut=="driver" else "#6A9EC4",
-             "justifyContent": "center", "alignItems": "center",
              "contents": [{"type": "text", "text": "🚗" if ut=="driver" else "🙋",
                            "size": "lg", "align": "center"}]},
             {"type": "box", "layout": "vertical", "flex": 1, "contents": [
@@ -1151,7 +1148,6 @@ def get_welcome_flex():
                 "contents": [
                     {"type": "box", "layout": "vertical", "width": "24px", "paddingTop": "5px", "paddingBottom": "5px",
                      "cornerRadius": "8px", "backgroundColor": "#D58A3A",
-                     "justifyContent": "center", "alignItems": "center",
                      "contents": [{"type": "text", "text": num, "size": "xs", "color": "#FFFFFF",
                                    "weight": "bold", "align": "center"}]},
                     {"type": "box", "layout": "vertical", "flex": 1, "contents": [
@@ -1219,11 +1215,9 @@ def get_welcome_flex():
 # --- 媒合規則 Flex 卡片（Item 4）---
 def get_rules_flex():
     def _rule(icon, bg, color, title, desc):
-        return {"type": "box", "layout": "horizontal", "spacing": "md", "alignItems": "flex-start",
-                "paddingTop": "8px", "paddingBottom": "8px", "contents": [
+        return {"type": "box", "layout": "horizontal", "spacing": "md", "paddingTop": "8px", "paddingBottom": "8px", "contents": [
                     {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
-                     "cornerRadius": "9px", "backgroundColor": bg, "justifyContent": "center",
-                     "alignItems": "center", "contents": [
+                     "cornerRadius": "9px", "backgroundColor": bg, "contents": [
                          {"type": "text", "text": icon, "size": "sm", "align": "center", "color": color}]},
                     {"type": "box", "layout": "vertical", "flex": 1, "contents": [
                         {"type": "text", "text": title, "size": "sm", "color": "#1A1D21",
@@ -1258,11 +1252,9 @@ def get_rules_flex():
         "type": "bubble",
         "header": {
             "type": "box", "layout": "horizontal", "paddingAll": "14px",
-            "backgroundColor": "#1A1D21", "spacing": "md", "alignItems": "center",
-            "contents": [
+            "backgroundColor": "#1A1D21", "spacing": "md", "contents": [
                 {"type": "box", "layout": "vertical", "width": "40px", "paddingTop": "8px", "paddingBottom": "8px",
                  "cornerRadius": "10px", "backgroundColor": "#2E3237",
-                 "justifyContent": "center", "alignItems": "center",
                  "contents": [{"type": "text", "text": "📋", "size": "lg", "align": "center"}]},
                 {"type": "box", "layout": "vertical", "flex": 1, "contents": [
                     {"type": "text", "text": "媒合規則說明",
@@ -2814,7 +2806,6 @@ def handle_message(event):
                     {"type": "box", "layout": "horizontal", "contents": [
                         {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
                          "cornerRadius": "10px", "backgroundColor": badge_bg,
-                         "justifyContent": "center", "alignItems": "center",
                          "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
                         {"type": "box", "layout": "vertical", "flex": 1, "paddingStart": "10px", "contents": [
                             {"type": "text", "text": role_label, "weight": "bold", "size": "sm", "color": "#FFFFFF"},
@@ -2826,7 +2817,7 @@ def handle_message(event):
                 # --- 路線視覺化 ---
                 time_text = t_info[5:16] + (" 起" if is_recur else "")
                 route_pin = {"type": "box", "layout": "vertical", "width": "14px", "spacing": "none",
-                    "justifyContent": "center", "contents": [
+                    "contents": [
                         {"type": "text", "text": "●", "color": accent, "size": "xxs", "align": "center"},
                         {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
                         {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
@@ -3226,7 +3217,6 @@ def handle_message(event):
                     {"type": "box", "layout": "horizontal", "contents": [
                         {"type": "box", "layout": "vertical", "width": "32px", "paddingTop": "6px", "paddingBottom": "6px",
                          "cornerRadius": "10px", "backgroundColor": badge_bg2,
-                         "justifyContent": "center", "alignItems": "center",
                          "contents": [{"type": "text", "text": icon, "size": "md", "align": "center"}]},
                         {"type": "box", "layout": "vertical", "flex": 1, "paddingStart": "10px", "contents": [
                             {"type": "text", "text": role_label, "weight": "bold", "size": "sm", "color": "#FFFFFF"},
@@ -3238,7 +3228,7 @@ def handle_message(event):
 
                 # --- body: 路線視覺化 ---
                 route_pin = {"type": "box", "layout": "vertical", "width": "14px", "spacing": "none",
-                    "justifyContent": "center", "contents": [
+                    "contents": [
                         {"type": "text", "text": "●", "color": accent, "size": "xxs", "align": "center"},
                         {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
                         {"type": "text", "text": "│", "color": "#B5BBC2", "size": "xxs", "align": "center"},
