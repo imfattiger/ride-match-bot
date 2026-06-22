@@ -2189,6 +2189,19 @@ def admin_low_ratings():
     except Exception as e:
         return {"error": str(e)}, 500
 
+@app.route("/admin/user-profile", methods=['GET'])
+def admin_user_profile():
+    if not _check_admin_token():
+        return {"error": "unauthorized"}, 401
+    uid = request.args.get('uid', '').strip()
+    if not uid:
+        return {"error": "missing uid"}, 400
+    try:
+        profile = line_bot_api.get_profile(uid)
+        return {"uid": uid, "name": profile.display_name, "picture": profile.picture_url}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 @app.route("/admin/all-ratings", methods=['GET'])
 def admin_all_ratings():
     if not _check_admin_token():
