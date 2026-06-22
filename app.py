@@ -2144,27 +2144,20 @@ def admin_low_ratings():
             stars = '⭐' * score
             rater_blocked = ' 🚫' if rater in blocked else ''
             ratee_blocked = ' 🚫' if ratee in blocked else ''
-            can_contact = rater not in blocked
-            contact_btn = (
-                f"<a href='https://line.me/R/ti/p/{rater}' target='_blank' "
-                f"style='background:#c0392b;color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;text-decoration:none'>問評分者</a>"
-                if can_contact else '<span style="color:#aaa;font-size:12px">已封鎖</span>'
-            )
             trs += (
                 f"<tr>"
                 f"<td style='font-size:11px'>"
                 f"  <b>評分者</b><br>"
-                f"  <code style='font-size:10px'>{rater}</code>{rater_blocked}<br>"
+                f"  <code style='font-size:11px;user-select:all;word-break:break-all'>{rater}</code>{rater_blocked}<br>"
                 f"  <div style='margin-top:4px'>{trip_summary(rater)}</div>"
                 f"</td>"
                 f"<td style='font-size:11px'>"
                 f"  <b>被評者</b><br>"
-                f"  <code style='font-size:10px'>{ratee}</code>{ratee_blocked}<br>"
+                f"  <code style='font-size:11px;user-select:all;word-break:break-all'>{ratee}</code>{ratee_blocked}<br>"
                 f"  <div style='margin-top:4px'>{trip_summary(ratee)}</div>"
                 f"</td>"
                 f"<td style='text-align:center'>{stars}<br>({score})</td>"
                 f"<td style='font-size:12px;text-align:center'>#{mid}<br>{str(cat)[:10]}</td>"
-                f"<td style='text-align:center'>{contact_btn}</td>"
                 f"</tr>"
             )
 
@@ -2187,8 +2180,8 @@ def admin_low_ratings():
 <a class="back" href="/admin?token={token}">← 返回後台</a>
 <p style="margin-top:8px;color:#666;font-size:13px">共 {len(ratings)} 筆 ｜ 🚫 = 已封鎖 ｜ 顯示評分者+被評者各自行程條件，方便交叉比對</p>
 <table>
-<tr><th>評分者 & 行程</th><th>被評者 & 行程</th><th>分數</th><th>行程ID/時間</th><th>聯絡</th></tr>
-{trs if trs else '<tr><td colspan="5" style="text-align:center;padding:20px;color:#999">目前無低評分紀錄</td></tr>'}
+<tr><th>評分者 UID & 行程</th><th>被評者 UID & 行程</th><th>分數</th><th>行程ID/時間</th></tr>
+{trs if trs else '<tr><td colspan="4" style="text-align:center;padding:20px;color:#999">目前無低評分紀錄</td></tr>'}
 </table>
 </body></html>"""
         return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
