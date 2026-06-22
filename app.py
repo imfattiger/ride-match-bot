@@ -1924,6 +1924,7 @@ def admin_panel():
 <h1>🚗 sun car 順咖媒合 管理後台</h1>
 <a href="/admin/community?token={os.getenv('ADMIN_SECRET','')}" style="color:#2c7a4b;font-size:13px;text-decoration:none">🐟 基隆社群用戶管理 →</a>
 <a href="/admin/low-ratings?token={os.getenv('ADMIN_SECRET','')}" style="color:#c0392b;font-size:13px;text-decoration:none;margin-left:16px">⚠️ 低評分名單 →</a>
+<a href="/admin/all-ratings?token={os.getenv('ADMIN_SECRET','')}" style="color:#2c3e50;font-size:13px;text-decoration:none;margin-left:16px">📋 所有評分 →</a>
 <div>
   <span class="stat">行程總數 <b>{len(trips)}</b></span>
   <span class="stat">配對紀錄 <b>{len(pairs)}</b></span>
@@ -2185,6 +2186,53 @@ def admin_low_ratings():
 </table>
 </body></html>"""
         return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route("/admin/all-ratings", methods=['GET'])
+def admin_all_ratings():
+    if not _check_admin_token():
+        return "<h3>401 Unauthorized</h3>", 401
+    try:
+        conn = get_db()
+        rows = conn.execute(q(
+            "SELECT rater_id, ratee_id, score, match_id, created_at FROM ratings ORDER BY created_at DESC"
+        )).fetchall()
+        conn.close()
+        token = request.args.get('token', '')
+        star_map = {1:'⭐', 2:'⭐⭐', 3:'⭐⭐⭐', 4:'⭐⭐⭐⭐', 5:'⭐⭐⭐⭐⭐'}
+        trs = ""
+        for rater, ratee, score, mid, cat in rows:
+            trs += (
+                f"<tr>"
+                f"<td><code style='user-select:all'>{rater}</code></td>"
+                f"<td><code style='user-select:all'>{ratee}</code></td>"
+                f"<td style='text-align:center'>{star_map.get(score,'?')} ({score})</td>"
+                f"<td style='text-align:center;color:#888;font-size:12px'>#{mid}<br>{str(cat)[:10]}</td>"
+                f"</tr>"
+            )
+        html = f"""<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>所有評分</title>
+<style>
+  body{{font-family:'Noto Sans TC',sans-serif;margin:20px;color:#333;font-size:13px}}
+  h1{{color:#1a1d21;font-size:18px}}
+  table{{border-collapse:collapse;width:100%;margin-top:12px}}
+  th{{background:#2c7a4b;color:#fff;padding:7px 10px;text-align:left;font-size:12px}}
+  td{{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:middle}}
+  tr:hover{{background:#f9f9f9}}
+  code{{background:#f5f5f5;padding:2px 5px;border-radius:4px;font-size:11px;word-break:break-all}}
+  .back{{color:#2c7a4b;font-size:13px;text-decoration:none}}
+</style></head><body>
+<h1>📋 所有評分紀錄</h1>
+<a class="back" href="/admin?token={token}">← 返回後台</a>
+<p style="margin-top:8px;color:#666;font-size:12px">共 {len(rows)} 筆 ｜ 點 UID 可全選複製</p>
+<table>
+<tr><th>評分者 UID</th><th>被評者 UID</th><th>分數</th><th>行程/時間</th></tr>
+{trs if trs else '<tr><td colspan="4" style="text-align:center;padding:20px;color:#999">尚無評分紀錄</td></tr>'}
+</table>
+</body></html>"""
+        return html
     except Exception as e:
         return {"error": str(e)}, 500
 
